@@ -3,14 +3,27 @@
 A multi-page site and working front-end prototype built from
 `Learner_Attendance_Parent_Monitoring_System_Requirements.docx`.
 
+## Just want to look at it?
+
+**Open the hosted copy — nothing to install:**
+<https://claude.ai/code/artifact/fb2a1c0e-5286-432d-b5ed-9c6a3eab137d>
+
+## Want to run it yourself?
+
+Clone the repo, then from the project folder:
+
 ```bash
 python -m http.server 8123
 ```
 
-Open <http://localhost:8123>. No build step, no dependencies.
+Now open <http://localhost:8123> **in that same machine's browser**.
 
-> Opening `index.html` from disk works, but some browsers disable `localStorage` on
-> `file://`, so changes won't persist. Serving over HTTP avoids that.
+> ⚠️ `localhost` means *your own computer*. That address only works on the machine where
+> you started the server — it is not a link you can send to anyone else. To share the
+> site, use the hosted copy above.
+
+No build step, no dependencies. Opening `index.html` straight from disk mostly works too,
+but some browsers disable `localStorage` on `file://`, so changes won't persist.
 
 ---
 
