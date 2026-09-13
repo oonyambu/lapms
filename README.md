@@ -19,21 +19,44 @@ Open <http://localhost:8123>. No build step, no dependencies.
 **Public** — `index.html` (overview), `blueprint.html` (roles, workflow, 13 tables, security),
 `privacy.html` (template notice, Data Protection Act 2019), `login.html`.
 
-**Application** — `app/`, 18 pages: 6 administrator, 4 teacher, 4 guardian, plus shared
+**Application** — `app/`, 20 pages: 6 administrator, 6 teacher, 4 guardian, plus shared
 learner profile, messages, notifications and reports.
+
+### Attendance is recorded at two levels
+
+- **Daily register** (`teacher-attendance.html`) — the class teacher, once a day.
+- **Lesson attendance** (`teacher-lessons.html`) — *any* teacher assigned to the class
+  records their own lesson, by subject and period. A subject teacher can take a lesson
+  register but still cannot take the daily register.
+
+Both screens support **bulk marking**: tick several learners (or Select all) and apply one
+status to all of them, or mark the whole class present in a single action.
+
+### Reports
+
+`report-general.html` produces a **weekly or monthly** report over every learner: days
+present/late/absent, lessons attended and missed, attendance rate, and the teachers' and
+parents' ratings — **excellent / good / fair / bad / worst**. It prints to A4 landscape
+with a school letterhead and a signature strip, and exports to CSV.
+
+### Classes
+
+A class carries a **form, a stream and a room**, and a form can hold as many streams as the
+school needs (the demo ships Grade 7 Ndovu *and* Grade 7 Nyati). Add or edit them under
+**Classes & staff**; the school name and address are under **School settings**.
 
 ---
 
 ## Demo accounts
 
-Mwangaza Primary School, Term 3 2026 — 4 classes, 44 learners, 39 guardians, ~1,100
-attendance records over 25 school days. All fictional.
+Mwangaza Primary School, Term 3 2026 — 5 classes (two Grade 7 streams), 53 learners,
+8 teachers, ~1,300 daily attendance records and 400 lessons over 25 school days. All fictional.
 
 | Account | Role | Worth trying because |
 |---|---|---|
 | Josephine Mwende | Administrator | Whole school, reports, audit log |
 | Margaret Achieng | Class teacher | Today's register is still outstanding |
-| **Alice Njeri** | **Subject teacher** | Two classes, and **no authority to take a register** |
+| **Alice Njeri** | **Subject teacher** | Teaches Maths in all five classes: can take a **lesson** register, never the **daily** one |
 | **Mary Wekesa** | **Guardian** | Two children, different classes |
 | Joseph Kiptoo | Guardian | One child |
 
@@ -84,7 +107,7 @@ Data is generated from a seeded PRNG, so every reviewer sees the same school. St
 
 ## Charts
 
-Statuses use a fixed palette — Present `#0ca30c`, Late `#fab219`, Absent `#d03b3b`,
+Attendance statuses use a fixed palette — Present `#0ca30c`, Late `#fab219`, Absent `#d03b3b`,
 Excused `#ec835a` — in that stacking order, which is the order validated for colour-vision
 separation. Don't reorder it: Late beside Excused falls below the legibility floor.
 
