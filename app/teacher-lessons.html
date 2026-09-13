@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson attendance — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['teacher', 'admin'],
+    page: 'teacher-lessons',
+    title: 'Lesson attendance',
+    sub: 'Who attended your lesson today'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope;
+  var myClasses = Store.classes(s).filter(function (cl) { return Store.mySubjects(s, cl.id).length; });
+
+  if (!myClasses.length) {
+    c.appendChild(el('div', { class: 'notice notice-warning' }, [
+      el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚿' }),
+      el('span', { text: 'You have no subject assignments, so there is no lesson register to take.' })
+    ]));
+    return;
+  }
+
+  var state = {
+    classId: U.qs('class') || myClasses[0].id,
+    subject: null,
+    date: U.qs('date') || Store.currentSchoolDay(),
+    period: 1,
+    lesson: null,
+    selected: {}
+  };
+
+  // ---------------- Lesson picker ----------------
+  var classSel = el('select', { id: 'cls' });
+  var subjSel = el('select', { id: 'subj' });
+  var dateI = el('input', { type: 'date', id: 'dt', value: state.date, max: U.today() });
+  var periodSel = el('select', { id: 'pd' }, [1, 2, 3, 4, 5, 6, 7, 8].map(function (p) {
+    return el('option', { value: p }, 'Period ' + p);
+  }));
+
+  function fillClasses() {
+    U.clear(classSel);
+    myClasses.forEach(function (cl) {
+      classSel.appendChild(el('option', { value: cl.id, selected: cl.id === state.classId ? true : null },
+        cl.label + (cl.room ? ' · ' + cl.room : '')));
+    });
+  }
+  function fillSubjects() {
+    U.clear(subjSel);
+    var subs = Store.mySubjects(s, state.classId);
+    subs.forEach(function (sub) {
+      subjSel.appendChild(el('option', { value: sub, selected: sub === state.subject ? true : null }, sub));
+    });
+    if (subs.indexOf(state.subject) === -1) state.subject = subs[0] || null;
+    subjSel.value = state.subject || '';
+  }
+  fillClasses(); fillSubjects();
+
+  classSel.addEventListener('change', function () {
+    state.classId = classSel.value; state.lesson = null; state.selected = {};
+    fillSubjects(); render();
+  });
+  subjSel.addEventListener('change', function () { state.subject = subjSel.value; state.lesson = null; render(); });
+  dateI.addEventListener('change', function () { state.date = dateI.value; state.lesson = null; render(); });
+  periodSel.addEventListener('change', function () { state.period = Number(periodSel.value); state.lesson = null; render(); });
+
+  var openBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button' }, 'Open register');
+  openBtn.addEventListener('click', function () {
+    try {
+      state.lesson = Store.createLesson(s, state.classId, state.subject, state.date, state.period);
+      U.toast('Lesson register open');
+      render();
+    } catch (err) { U.toast('Not permitted: ' + err.message); }
+  });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field' }, [el('label', { for: 'cls' }, 'Class'), classSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'subj' }, 'Subject'), subjSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'dt' }, 'Date'), dateI]),
+    el('div', { class: 'field' }, [el('label', { for: 'pd' }, 'Period'), periodSel]),
+    el('div', { class: 'grow' }),
+    openBtn
+  ]));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  // ---------------- Render ----------------
+  function findLesson() {
+    if (state.lesson) return state.lesson;
+    return Store.lessons(s, { classId: state.classId, date: state.date, subject: state.subject })
+      .filter(function (l) { return l.period === state.period; })[0] || null;
+  }
+
+  function render() {
+    U.clear(host);
+    periodSel.value = String(state.period);
+    var lesson = findLesson();
+    state.lesson = lesson;
+
+    if (!lesson) {
+      host.appendChild(Shell.emptyState(
+        'No register yet for ' + (state.subject || 'this subject') + ', period ' + state.period +
+        ' on ' + U.longDate(state.date) + '. Choose “Open register” to start one.'));
+      renderRecent();
+      return;
+    }
+
+    var roster = Store.learners(s, { classId: lesson.classId });
+    var cls = Store.classById(lesson.classId);
+
+    // ---- Bulk action bar ----
+    var counter = el('span', { class: 'muted', style: 'font-size:.8rem' });
+    function selectedIds() {
+      return Object.keys(state.selected).filter(function (k) { return state.selected[k]; });
+    }
+    function refreshCounter() {
+      var n = selectedIds().length;
+      counter.textContent = n ? n + ' selected' : 'None selected';
+      U.$$('[data-bulk]', bulk).forEach(function (b) { b.disabled = !n; });
+    }
+
+    var bulk = el('div', { class: 'filters', style: 'align-items:center' });
+    var selectAll = el('input', { type: 'checkbox', id: 'selAll', style: 'width:auto' });
+    selectAll.addEventListener('change', function () {
+      roster.forEach(function (l) { state.selected[l.id] = selectAll.checked; });
+      U.$$('[data-pick]', host).forEach(function (cb) { cb.checked = selectAll.checked; });
+      refreshCounter();
+    });
+
+    bulk.appendChild(el('div', { class: 'row', style: 'gap:8px' }, [
+      selectAll, el('label', { for: 'selAll', style: 'margin:0' }, 'Select all')
+    ]));
+    bulk.appendChild(counter);
+    bulk.appendChild(el('div', { class: 'grow' }));
+    bulk.appendChild(el('span', { class: 'muted', style: 'font-size:.8rem' }, 'Mark selected:'));
+
+    SEED.STATUS_ORDER.filter(function (k) { return k !== 'activity'; }).forEach(function (key) {
+      var meta = SEED.STATUSES[key];
+      var b = el('button', {
+        class: 'status-opt opt-' + meta.cls, type: 'button', 'data-bulk': '1', disabled: true
+      }, [
+        el('span', { class: 'dot', 'aria-hidden': 'true' }),
+        el('span', { 'aria-hidden': 'true', text: meta.icon }),
+        el('span', { text: meta.label })
+      ]);
+      b.addEventListener('click', function () {
+        var ids = selectedIds();
+        if (!ids.length) return;
+        var n = Store.setLessonAttendanceMany(s, lesson.id, ids, key);
+        U.toast(U.plural(n, 'learner') + ' marked ' + meta.label.toLowerCase());
+        state.selected = {};
+        render();
+      });
+      bulk.appendChild(b);
+    });
+
+    var allPresent = el('button', { class: 'btn btn-sm', type: 'button' }, '✓ All present');
+    allPresent.addEventListener('click', function () {
+      var n = Store.setLessonAttendanceMany(s, lesson.id, roster.map(function (l) { return l.id; }), 'present');
+      U.toast('Whole class marked present (' + n + ')');
+      state.selected = {};
+      render();
+    });
+    bulk.appendChild(allPresent);
+
+    // ---- Roll ----
+    var rows = el('div', { class: 'card card-pad-0' });
+    rows.appendChild(el('div', { class: 'card-head', style: 'padding:18px 20px 12px' }, [
+      el('h2', { style: 'font-size:1rem',
+        text: lesson.subject + ' — ' + cls.label + ', period ' + lesson.period }),
+      el('span', { class: 'muted', style: 'font-size:.78rem',
+        text: U.longDate(lesson.date) + (lesson.room ? ' · ' + lesson.room : '') +
+          ' · ' + Store.userName(lesson.recordedBy) })
+    ]));
+
+    roster.forEach(function (l) {
+      var rec = Store.lessonAttendanceFor(s, lesson.id, l.id);
+
+      var pick = el('input', {
+        type: 'checkbox', 'data-pick': '1', style: 'width:auto',
+        checked: state.selected[l.id] ? true : null,
+        'aria-label': 'Select ' + l.name
+      });
+      pick.addEventListener('change', function () {
+        state.selected[l.id] = pick.checked;
+        refreshCounter();
+      });
+
+      var picker = el('div', { class: 'status-picker', role: 'group', 'aria-label': 'Attendance for ' + l.name });
+      SEED.STATUS_ORDER.filter(function (k) { return k !== 'activity'; }).forEach(function (key) {
+        var meta = SEED.STATUSES[key];
+        var btn = el('button', {
+          type: 'button', class: 'status-opt opt-' + meta.cls,
+          'aria-pressed': String(!!rec && rec.status === key), title: meta.label
+        }, [
+          el('span', { class: 'dot', 'aria-hidden': 'true' }),
+          el('span', { 'aria-hidden': 'true', text: meta.icon }),
+          el('span', { text: meta.label })
+        ]);
+        btn.addEventListener('click', function () {
+          try {
+            Store.setLessonAttendance(s, lesson.id, l.id, key);
+            Store.save();
+          } catch (err) { U.toast('Not permitted: ' + err.message); return; }
+          U.$$('.status-opt', picker).forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+          btn.setAttribute('aria-pressed', 'true');
+        });
+        picker.appendChild(btn);
+      });
+
+      rows.appendChild(el('div', { class: 'register-row' }, [
+        el('div', { class: 'register-learner' }, [
+          pick,
+          el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(l.name) }),
+          el('span', { style: 'min-width:0' }, [
+            el('a', { class: 'register-name', href: 'learner.html?id=' + l.id, style: 'color:inherit', text: l.name }),
+            el('div', { class: 'register-meta', text: l.admissionNo })
+          ])
+        ]),
+        picker
+      ]));
+    });
+
+    host.appendChild(bulk);
+    host.appendChild(rows);
+    refreshCounter();
+    renderRecent();
+  }
+
+  function renderRecent() {
+    var mine = Store.lessons(s, { mine: sc.role === 'teacher' }).slice(0, 12);
+    if (!mine.length) return;
+    var body = el('div');
+    mine.forEach(function (l) {
+      var roll = Store.lessonRoll(s, l.id);
+      var present = roll.filter(function (r) { return r.status === 'present' || r.status === 'late'; }).length;
+      body.appendChild(el('div', { class: 'register-row', style: 'padding-left:0;padding-right:0' }, [
+        el('div', null, [
+          el('div', { class: 'register-name', text: l.subject + ' — ' + Store.classLabel(l.classId) }),
+          el('div', { class: 'register-meta',
+            text: U.relativeDay(l.date) + ' · period ' + l.period + (l.room ? ' · ' + l.room : '') })
+        ]),
+        el('div', { style: 'text-align:right' }, [
+          el('span', { class: 'badge badge-present' }, [
+            el('span', { class: 'dot' }), present + ' of ' + roll.length + ' attended'
+          ]),
+          el('div', { style: 'margin-top:6px' },
+            el('button', {
+              class: 'btn btn-sm', type: 'button',
+              onclick: function () {
+                state.classId = l.classId; state.subject = l.subject;
+                state.date = l.date; state.period = l.period; state.lesson = l; state.selected = {};
+                fillClasses(); fillSubjects(); dateI.value = l.date;
+                render(); window.scrollTo(0, 0);
+              }
+            }, 'Open'))
+        ])
+      ]));
+    });
+    host.appendChild(Shell.card('Recent lessons', null, body));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

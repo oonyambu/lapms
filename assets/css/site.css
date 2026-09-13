@@ -1,0 +1,248 @@
+/* ==========================================================================
+   LAPMS - public site (overview, blueprint, security)
+   ========================================================================== */
+
+.site-header {
+  position: sticky; top: 0; z-index: 30;
+  background: color-mix(in srgb, var(--surface-0) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.site-header .wrap { display: flex; align-items: center; gap: 20px; min-height: 62px; flex-wrap: wrap; padding-block: 9px; }
+.site-nav { display: flex; gap: 4px; margin-left: auto; align-items: center; flex-wrap: wrap; }
+.site-nav a {
+  padding: 7px 12px; border-radius: var(--radius-sm);
+  font-size: .875rem; font-weight: 520; color: var(--text-secondary);
+}
+.site-nav a:hover { background: var(--surface-sunken); color: var(--text-primary); text-decoration: none; }
+.site-nav a[aria-current="page"] { color: var(--text-primary); font-weight: 620; }
+
+@media (max-width: 760px) {
+  .site-nav .hide-sm { display: none; }
+}
+
+/* Below this the brand and the nav cannot share a line - let the nav wrap under it. */
+@media (max-width: 600px) {
+  .site-header .wrap { gap: 8px; }
+  .site-nav { width: 100%; margin-left: 0; justify-content: flex-start; }
+  .site-nav a { padding: 6px 9px; }
+}
+
+/* ---------- Hero ---------- */
+.hero { padding: 72px 0 56px; position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: -160px 0 auto 0; height: 420px; z-index: -1;
+  background: radial-gradient(60% 100% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent) 0%, transparent 72%);
+}
+.hero-grid { display: grid; gap: 44px; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); align-items: center; }
+@media (max-width: 940px) { .hero-grid { grid-template-columns: 1fr; } .hero { padding: 44px 0 36px; } }
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: .74rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--accent-ink); background: var(--accent-soft);
+  border: 1px solid var(--accent-border); border-radius: 999px; padding: 4px 12px;
+  margin-bottom: 18px;
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 5.2vw, 4rem);
+  font-weight: 600; letter-spacing: -.028em; line-height: 1.03; margin-bottom: 20px;
+}
+.hero-lede { font-size: 1.08rem; color: var(--text-secondary); max-width: 54ch; margin-bottom: 26px; }
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-note { margin-top: 18px; font-size: .8rem; color: var(--text-muted); }
+
+/* Mock device that previews the app */
+.mock {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-1); box-shadow: var(--shadow-2); overflow: hidden;
+}
+.mock-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface-sunken); }
+.mock-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); }
+.mock-title { font-size: .72rem; color: var(--text-muted); margin-left: 8px; font-family: var(--font-mono); }
+.mock-body { padding: 16px; display: grid; gap: 12px; }
+
+/* ---------- Sections ---------- */
+.section { padding: 56px 0; }
+.section-sunken { background: var(--surface-1); border-block: 1px solid var(--border); }
+.section-head { max-width: 62ch; margin-bottom: 32px; }
+.section-head h2 {
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  font-weight: 600; letter-spacing: -.02em; line-height: 1.1;
+}
+.section-head p { color: var(--text-secondary); margin-bottom: 0; }
+
+.feature-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(268px, 100%), 1fr)); }
+.feature {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px;
+}
+.section-sunken .feature { background: var(--surface-0); }
+.feature-icon {
+  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent-ink); font-size: 1.05rem;
+  border: 1px solid var(--accent-border); margin-bottom: 14px;
+}
+.feature h3 { font-size: 1rem; margin-bottom: 6px; }
+.feature p { font-size: .875rem; color: var(--text-secondary); margin-bottom: 0; }
+.feature ul { margin: 10px 0 0; padding-left: 18px; font-size: .875rem; color: var(--text-secondary); }
+.feature li { margin-bottom: 4px; }
+
+/* Role columns */
+.role-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
+.role-card {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-1); padding: 0; overflow: hidden; display: flex; flex-direction: column;
+}
+.role-card-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--border); }
+.role-card-head h3 { margin-bottom: 4px; }
+.role-card-body { padding: 18px 22px; flex: 1; }
+.role-card-foot { padding: 0 22px 20px; }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.check-list li { display: grid; grid-template-columns: 18px 1fr; gap: 9px; font-size: .875rem; color: var(--text-secondary); }
+.check-list .tick { color: var(--good); font-weight: 700; }
+.check-list .cross { color: var(--critical); font-weight: 700; }
+
+/* Workflow steps */
+.flow { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); counter-reset: step; }
+.flow-step {
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 18px;
+  background: var(--surface-1); position: relative;
+}
+.flow-step::before {
+  counter-increment: step; content: counter(step);
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: .78rem; font-weight: 700; margin-bottom: 12px;
+}
+.flow-step h3 { font-size: .92rem; margin-bottom: 5px; }
+.flow-step p { font-size: .82rem; color: var(--text-secondary); margin: 0; }
+.flow-actor { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 650; color: var(--text-muted); display: block; margin-bottom: 4px; }
+
+/* Matrix */
+.matrix { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; }
+.matrix thead th {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-muted); font-weight: 650;
+}
+.matrix tbody th { font-weight: 550; color: var(--text-primary); }
+.matrix td { text-align: center; }
+.matrix tbody tr:last-child th, .matrix tbody tr:last-child td { border-bottom: 0; }
+
+/* Doc pages */
+.doc-layout { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 40px; padding: 40px 0 72px; align-items: start; }
+/* Grid items default to min-width:auto; without this a long token widens the track. */
+.doc-layout > * { min-width: 0; }
+.doc-body { overflow-wrap: break-word; }
+@media (max-width: 900px) { .doc-layout { grid-template-columns: 1fr; gap: 22px; } .doc-toc { position: static !important; } }
+.doc-toc { position: sticky; top: 82px; font-size: .8125rem; }
+.doc-toc-title { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); font-weight: 650; margin-bottom: 10px; }
+.doc-toc a { display: block; padding: 5px 10px; border-radius: var(--radius-sm); color: var(--text-secondary); border-left: 2px solid var(--border); }
+.doc-toc a:hover { background: var(--surface-sunken); color: var(--text-primary); text-decoration: none; }
+.doc-body { max-width: 76ch; }
+.doc-body h1 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(2rem, 3.6vw, 2.7rem); letter-spacing: -.025em; line-height: 1.06;
+}
+.doc-body h2 {
+  font-family: var(--font-display); font-weight: 600;
+  margin-top: 52px; padding-top: 8px; font-size: 1.65rem; letter-spacing: -.015em;
+}
+.doc-body h2:first-child { margin-top: 0; }
+.doc-body h3 { margin-top: 28px; font-size: 1rem; }
+.doc-body p, .doc-body li { color: var(--text-secondary); }
+.doc-body ul, .doc-body ol { padding-left: 20px; }
+.doc-body li { margin-bottom: 6px; }
+.doc-body strong { color: var(--text-primary); }
+.doc-body code {
+  font-family: var(--font-mono); font-size: .82em;
+  background: var(--surface-sunken); padding: 1px 5px; border-radius: 4px; color: var(--text-primary);
+}
+
+.schema-card {
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  background: var(--surface-1); margin-bottom: 12px;
+}
+.schema-head {
+  padding: 9px 14px; background: var(--surface-sunken); border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: .8rem; font-weight: 650; color: var(--text-primary);
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+}
+.schema-fields { padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+.schema-field {
+  font-family: var(--font-mono); font-size: .72rem;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 7px; color: var(--text-secondary);
+}
+.schema-field.pk { color: var(--accent-ink); border-color: var(--accent-border); background: var(--accent-soft); }
+
+/* CTA + footer */
+.cta {
+  border: 1px solid var(--accent-border); background: var(--accent-soft);
+  border-radius: var(--radius-lg); padding: 36px; text-align: center;
+}
+.cta h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.8rem; letter-spacing: -.02em; margin-bottom: 8px; }
+.cta p { color: var(--text-secondary); max-width: 52ch; margin-inline: auto; }
+
+.site-footer { border-top: 1px solid var(--border); padding: 36px 0; margin-top: 8px; background: var(--surface-1); }
+.footer-grid { display: grid; gap: 28px; grid-template-columns: minmax(min(220px, 100%), 1.4fr) repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }
+.footer-col h4 { font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 10px; }
+.footer-col a { display: block; font-size: .85rem; color: var(--text-secondary); padding: 3px 0; }
+.footer-note { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--text-muted); }
+
+/* Must come after .footer-grid above: at equal specificity the later rule wins.
+   220px + 140px of tracks cannot fit a phone, so stack the footer instead. */
+@media (max-width: 600px) {
+  .footer-grid { grid-template-columns: 1fr; gap: 22px; }
+}
+
+
+/* ==========================================================================
+   Photography
+   Creative Commons images of Kenyan schools - see CREDITS.md. Faces belong to
+   real people, so these appear only as editorial imagery on the public pages;
+   learner records in the app use initials, never a stranger's photograph.
+   ========================================================================== */
+
+.shot { position: relative; border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-sunken); }
+.shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.shot-credit {
+  position: absolute; right: 8px; bottom: 8px;
+  font-size: .62rem; line-height: 1.3; color: rgba(255, 255, 255, .82);
+  background: rgba(20, 16, 8, .55); backdrop-filter: blur(3px);
+  padding: 3px 8px; border-radius: 999px; max-width: calc(100% - 16px);
+}
+.shot-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Hero: photograph on the left of the fold, the live panel overlapping it */
+.hero-shot { aspect-ratio: 4 / 3; box-shadow: var(--shadow-2); }
+.hero-figure { position: relative; }
+.hero-panel {
+  position: absolute; left: -18px; bottom: -26px; width: min(310px, 78%);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px 15px; box-shadow: var(--shadow-2);
+}
+@media (max-width: 940px) {
+  .hero-panel { position: static; width: 100%; margin-top: 14px; }
+}
+
+/* Band: a full-width photograph carrying a short line of type */
+.band { position: relative; min-height: 340px; display: grid; align-items: end; overflow: hidden; }
+.band-img { position: absolute; inset: 0; }
+.band-img img { width: 100%; height: 100%; object-fit: cover; }
+.band::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(20, 16, 8, .15) 0%, rgba(20, 16, 8, .82) 100%);
+}
+.band-body { position: relative; z-index: 1; padding: 40px 0; color: #fff; }
+.band-body h2 {
+  font-family: var(--font-display); font-weight: 600; color: #fff;
+  font-size: clamp(1.6rem, 3vw, 2.2rem); letter-spacing: -.02em; max-width: 20ch; margin-bottom: 10px;
+}
+.band-body p { color: rgba(255, 255, 255, .88); max-width: 46ch; margin: 0; }
+
+/* Role cards get a photographic head */
+.role-shot { aspect-ratio: 16 / 10; border-radius: 0; }
+.role-card { overflow: hidden; }

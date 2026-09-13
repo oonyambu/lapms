@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>People &amp; access — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin'],
+    page: 'admin-people',
+    title: 'People & access',
+    sub: 'Accounts, roles and guardian links'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope, d = Store.db();
+  var state = { tab: 'accounts', role: '', q: '' };
+
+  c.appendChild(el('p', { class: 'page-intro' },
+    'A guardian sees a learner because a link exists; a teacher sees a class because an assignment does. Withdraw either and access ends at once.'));
+
+  var tabs = el('div', { class: 'tabs', role: 'tablist' });
+  [['accounts', 'User accounts'], ['links', 'Guardian linkage'], ['summary', 'Access summary']].forEach(function (t) {
+    var b = el('button', { class: 'tab', role: 'tab', type: 'button', 'aria-selected': String(state.tab === t[0]) }, t[1]);
+    b.addEventListener('click', function () {
+      state.tab = t[0];
+      U.$$('.tab', tabs).forEach(function (x) { x.setAttribute('aria-selected', 'false'); });
+      b.setAttribute('aria-selected', 'true');
+      render();
+    });
+    tabs.appendChild(b);
+  });
+  c.appendChild(tabs);
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  var ROLE_BADGE = { admin: 'badge-activity', teacher: 'badge-present', parent: 'badge-excused' };
+
+  function renderAccounts() {
+    var qInput = el('input', { type: 'search', id: 'pq', placeholder: 'Search by name, phone or email', value: state.q });
+    var roleSel = el('select', { id: 'pr' }, [
+      el('option', { value: '' }, 'All roles'),
+      el('option', { value: 'admin', selected: state.role === 'admin' ? true : null }, 'Administrators'),
+      el('option', { value: 'teacher', selected: state.role === 'teacher' ? true : null }, 'Teachers'),
+      el('option', { value: 'parent', selected: state.role === 'parent' ? true : null }, 'Parents / guardians')
+    ]);
+    qInput.addEventListener('input', function () { state.q = qInput.value; render(); });
+    roleSel.addEventListener('change', function () { state.role = roleSel.value; render(); });
+
+    host.appendChild(el('div', { class: 'filters' }, [
+      el('div', { class: 'field', style: 'flex:1 1 260px' }, [el('label', { for: 'pq' }, 'Search'), qInput]),
+      el('div', { class: 'field' }, [el('label', { for: 'pr' }, 'Role'), roleSel])
+    ]));
+
+    var q = state.q.toLowerCase();
+    var users = Store.people(s, state.role || null).filter(function (u) {
+      if (!q) return true;
+      return (u.name + ' ' + (u.phone || '') + ' ' + (u.email || '')).toLowerCase().indexOf(q) !== -1;
+    });
+
+    var tbody = el('tbody');
+    users.forEach(function (u) {
+      var reach = Store.scope({ userId: u.id });
+      var deactivate = el('button', {
+        class: 'btn btn-sm ' + (u.status === 'active' ? 'btn-danger' : ''),
+        type: 'button',
+        disabled: u.id === sc.userId ? true : null,
+        title: u.id === sc.userId ? 'You cannot change your own account status' : ''
+      }, u.status === 'active' ? 'Deactivate' : 'Reactivate');
+      deactivate.addEventListener('click', function () {
+        var next = u.status === 'active' ? 'inactive' : 'active';
+        U.confirmBox(next === 'inactive' ? 'Deactivate this account?' : 'Reactivate this account?',
+          next === 'inactive'
+            ? u.name + ' will be signed out and will lose all access until reactivated.'
+            : u.name + ' will regain the access their role and links allow.',
+          function () {
+            try { Store.setUserStatus(s, u.id, next); U.toast('Account ' + next); render(); }
+            catch (err) { U.toast(err.message); }
+          }, next === 'inactive' ? 'Deactivate' : 'Reactivate');
+      });
+
+      tbody.appendChild(el('tr', null, [
+        el('td', null, el('div', { class: 'row', style: 'gap:10px' }, [
+          el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(u.name) }),
+          el('span', null, [
+            el('div', { style: 'font-weight:550;font-size:.875rem' }, u.name + (u.id === sc.userId ? ' (you)' : '')),
+            el('div', { class: 'muted', style: 'font-size:.74rem', text: u.title || '' })
+          ])
+        ])),
+        el('td', null, el('span', { class: 'badge ' + ROLE_BADGE[u.role] }, [
+          el('span', { class: 'dot' }), Shell.ROLE_LABEL[u.role]
+        ])),
+        el('td', null, el('div', null, [
+          el('div', { style: 'font-size:.82rem', text: u.phone || '—' }),
+          el('div', { class: 'muted', style: 'font-size:.74rem', text: u.email || '' })
+        ])),
+        el('td', { class: 'num', text: String(reach.learnerIds.length) }),
+        el('td', null, el('span', { class: 'badge ' + (u.status === 'active' ? 'badge-present' : 'badge-absent') }, [
+          el('span', { class: 'dot' }), u.status === 'active' ? 'Active' : 'Inactive'
+        ])),
+        el('td', null, deactivate)
+      ]));
+    });
+
+    host.appendChild(Shell.card(
+      U.plural(users.length, 'account'),
+      'Reach is computed by the same rule the data layer applies.',
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+        el('thead', null, el('tr', null, [
+          el('th', null, 'Name'), el('th', null, 'Role'), el('th', null, 'Contact'),
+          el('th', { class: 'num' }, 'Learners reachable'), el('th', null, 'Status'), el('th', null, '')
+        ])),
+        tbody
+      ]))
+    ));
+  }
+
+  function renderLinks() {
+    var tbody = el('tbody');
+    d.parentLinks.slice().sort(function (a, b) {
+      var la = d.learners.filter(function (x) { return x.id === a.learnerId; })[0];
+      var lb = d.learners.filter(function (x) { return x.id === b.learnerId; })[0];
+      return (la ? la.name : '').localeCompare(lb ? lb.name : '');
+    }).forEach(function (link) {
+      var learner = d.learners.filter(function (x) { return x.id === link.learnerId; })[0];
+      var parent = d.parents.filter(function (x) { return x.id === link.parentId; })[0];
+      if (!learner || !parent) return;
+
+      var toggle = el('button', { class: 'btn btn-sm ' + (link.authorized ? 'btn-danger' : ''), type: 'button' },
+        link.authorized ? 'Withdraw' : 'Authorise');
+      toggle.addEventListener('click', function () {
+        U.confirmBox(link.authorized ? 'Withdraw this link?' : 'Authorise this link?',
+          link.authorized
+            ? parent.name + ' will immediately lose all access to ' + learner.name + '’s records.'
+            : parent.name + ' will be able to see ' + learner.name + '’s attendance, movement and shared behaviour records.',
+          function () {
+            Store.setLinkAuthorization(s, link.id, !link.authorized);
+            U.toast(link.authorized ? 'Link withdrawn' : 'Link authorised');
+            render();
+          }, link.authorized ? 'Withdraw' : 'Authorise');
+      });
+
+      tbody.appendChild(el('tr', null, [
+        el('td', null, el('a', { href: 'learner.html?id=' + learner.id, style: 'color:inherit;font-weight:550', text: learner.name })),
+        el('td', { class: 'nowrap', text: Store.classLabel(learner.classId) }),
+        el('td', null, el('div', null, [
+          el('div', { style: 'font-size:.85rem', text: parent.name }),
+          el('div', { class: 'muted', style: 'font-size:.74rem', text: parent.phone })
+        ])),
+        el('td', { class: 'nowrap', text: link.relationship }),
+        el('td', { class: 'nowrap muted', style: 'font-size:.8rem', text: link.verifiedOn || '—' }),
+        el('td', null, el('span', { class: 'badge ' + (link.authorized ? 'badge-present' : 'badge-absent') }, [
+          el('span', { class: 'dot' }), link.authorized ? 'Authorised' : 'Withdrawn'
+        ])),
+        el('td', null, toggle)
+      ]));
+    });
+
+    var unlinked = d.learners.filter(function (l) {
+      return !d.parentLinks.some(function (x) { return x.learnerId === l.id && x.authorized; });
+    });
+    if (unlinked.length) {
+      host.appendChild(el('div', { class: 'notice notice-warning' }, [
+        el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚠' }),
+        el('span', { text: U.plural(unlinked.length, 'learner') + ' has no authorised guardian: ' +
+          unlinked.map(function (l) { return l.name; }).join(', ') + '. No one will receive their notifications.' })
+      ]));
+    }
+
+    host.appendChild(Shell.card(
+      'Parent / guardian linkage',
+      'One row, one authorisation — the whole basis of guardian access.',
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+        el('thead', null, el('tr', null, [
+          el('th', null, 'Learner'), el('th', null, 'Class'), el('th', null, 'Guardian'),
+          el('th', null, 'Relationship'), el('th', null, 'Verified'), el('th', null, 'Status'), el('th', null, '')
+        ])),
+        tbody
+      ]))
+    ));
+  }
+
+  function renderSummary() {
+    var byRole = { admin: 0, teacher: 0, parent: 0 };
+    d.users.forEach(function (u) { if (byRole[u.role] !== undefined) byRole[u.role] += 1; });
+    var active = d.users.filter(function (u) { return u.status === 'active'; }).length;
+    var authLinks = d.parentLinks.filter(function (l) { return l.authorized; }).length;
+
+    host.appendChild(Charts.statRow([
+      { label: 'User accounts', value: d.users.length, tone: 'accent' },
+      { label: 'Active', value: active, tone: 'good', icon: '✓' },
+      { label: 'Administrators', value: byRole.admin, tone: 'accent' },
+      { label: 'Teachers', value: byRole.teacher, tone: 'accent' },
+      { label: 'Guardians', value: byRole.parent, tone: 'accent' },
+      { label: 'Authorised links', value: authLinks, tone: 'good' }
+    ]));
+
+    host.appendChild(Shell.card(
+      'How far each account can reach',
+      'From each teacher’s assignments.',
+      Charts.barList({
+        nameHeader: 'Teacher',
+        seriesLabel: 'Learners reachable',
+        max: d.learners.length,
+        rows: d.teachers.map(function (t) {
+          var reach = Store.scope({ userId: t.userId });
+          return {
+            name: t.name,
+            value: reach.learnerIds.length,
+            display: reach.learnerIds.length + ' of ' + d.learners.length
+          };
+        })
+      })
+    ));
+
+    var kids = {};
+    d.parentLinks.filter(function (l) { return l.authorized; })
+      .forEach(function (l) { kids[l.parentId] = (kids[l.parentId] || 0) + 1; });
+    var dist = {};
+    Object.keys(kids).forEach(function (p) { dist[kids[p]] = (dist[kids[p]] || 0) + 1; });
+
+    host.appendChild(Shell.card(
+      'Guardians by number of linked children',
+      '',
+      Charts.barList({
+        nameHeader: 'Linked children',
+        seriesLabel: 'Guardians',
+        rows: Object.keys(dist).sort().map(function (k) {
+          return { name: U.plural(Number(k), 'child', 'children'), value: dist[k] };
+        })
+      })
+    ));
+  }
+
+  function render() {
+    U.clear(host);
+    if (state.tab === 'accounts') renderAccounts();
+    else if (state.tab === 'links') renderLinks();
+    else renderSummary();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

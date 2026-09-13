@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reports — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin', 'teacher'],
+    page: 'reports',
+    title: 'Reports',
+    sub: ''
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope, d = Store.db();
+  var days = Store.termDays();
+  var state = { from: days[0], to: days[days.length - 1], classId: '' };
+
+  var fromI = el('input', { type: 'date', id: 'from', value: state.from });
+  var toI = el('input', { type: 'date', id: 'to', value: state.to });
+  var clsSel = el('select', { id: 'cls' }, [el('option', { value: '' }, 'All my classes')].concat(
+    Store.classes(s).map(function (cl) { return el('option', { value: cl.id }, cl.label); })));
+  [fromI, toI, clsSel].forEach(function (n) {
+    n.addEventListener('change', function () {
+      state.from = fromI.value; state.to = toI.value; state.classId = clsSel.value;
+      render();
+    });
+  });
+
+  var printBtn = el('button', { class: 'btn btn-sm no-print', type: 'button' }, 'Print');
+  printBtn.addEventListener('click', function () { window.print(); });
+
+  var exportBtn = el('button', { class: 'btn btn-sm btn-primary no-print', type: 'button' }, 'Export CSV');
+
+  c.appendChild(el('div', { class: 'filters no-print' }, [
+    el('div', { class: 'field' }, [el('label', { for: 'from' }, 'From'), fromI]),
+    el('div', { class: 'field' }, [el('label', { for: 'to' }, 'To'), toI]),
+    el('div', { class: 'field' }, [el('label', { for: 'cls' }, 'Class'), clsSel]),
+    el('div', { class: 'grow' }),
+    printBtn, exportBtn
+  ]));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  function rangeDays() {
+    return days.filter(function (x) { return x >= state.from && x <= state.to; });
+  }
+
+  function learnerRows() {
+    return Store.learners(s, state.classId ? { classId: state.classId } : {}).map(function (l) {
+      var st = Store.learnerStats(s, l.id, state.from, state.to);
+      return { learner: l, stats: st };
+    });
+  }
+
+  exportBtn.addEventListener('click', function () {
+    var rows = [['Admission number', 'Learner', 'Class', 'School days recorded',
+      'Present', 'Late', 'Absent', 'Excused', 'School activity', 'Attendance rate %']];
+    learnerRows().forEach(function (r) {
+      rows.push([
+        r.learner.admissionNo, r.learner.name, Store.classLabel(r.learner.classId), r.stats.total,
+        r.stats.counts.present, r.stats.counts.late, r.stats.counts.absent,
+        r.stats.counts.excused, r.stats.counts.activity,
+        r.stats.rate === null ? '' : r.stats.rate
+      ]);
+    });
+    U.downloadCsv('lapms-attendance-' + state.from + '-to-' + state.to + '.csv', rows);
+    Store.audit(s, 'Exported attendance report',
+      (state.classId ? Store.classLabel(state.classId) : 'All classes') + ' — ' + state.from + ' to ' + state.to);
+    Store.save();
+    U.toast('Report exported');
+  });
+
+  function render() {
+    U.clear(host);
+    var rd = rangeDays();
+    var rows = learnerRows();
+
+    if (!rd.length) {
+      host.appendChild(Shell.emptyState('No school days fall inside this range.'));
+      return;
+    }
+
+    // ---- Totals over the range ----
+    var totals = { present: 0, late: 0, absent: 0, excused: 0, activity: 0 };
+    var recorded = 0;
+    rows.forEach(function (r) {
+      Object.keys(totals).forEach(function (k) { totals[k] += r.stats.counts[k]; });
+      recorded += r.stats.total;
+    });
+    var inSchool = totals.present + totals.late + totals.activity;
+
+    host.appendChild(el('div', null, [
+      el('h2', { style: 'font-size:1.1rem;margin-bottom:2px' },
+        (state.classId ? Store.classLabel(state.classId) : 'Whole school') + ' attendance report'),
+      el('p', { class: 'muted', style: 'font-size:.82rem' },
+        U.longDate(state.from) + ' to ' + U.longDate(state.to) + ' · ' +
+        U.plural(rd.length, 'school day') + ' · ' + U.plural(rows.length, 'learner'))
+    ]));
+
+    host.appendChild(Charts.statRow([
+      { label: 'Attendance rate', value: recorded ? U.pct(inSchool, recorded) + '%' : '—', tone: 'accent' },
+      { label: 'Present', value: totals.present, tone: 'good', icon: '✓' },
+      { label: 'Late', value: totals.late, tone: 'warning', icon: '◴' },
+      { label: 'Absent', value: totals.absent, tone: 'critical', icon: '✕' },
+      { label: 'Excused', value: totals.excused, tone: 'serious', icon: '✉' },
+      { label: 'School activity', value: totals.activity, tone: 'accent', icon: '⚑' }
+    ]));
+
+    // ---- By class ----
+    var classRows = Store.classes(s)
+      .filter(function (cl) { return !state.classId || cl.id === state.classId; })
+      .map(function (cl) {
+        var counts = { present: 0, late: 0, absent: 0, excused: 0, activity: 0 };
+        var n = 0;
+        Store.learners(s, { classId: cl.id }).forEach(function (l) {
+          var st = Store.learnerStats(s, l.id, state.from, state.to);
+          Object.keys(counts).forEach(function (k) { counts[k] += st.counts[k]; });
+          n += st.total;
+        });
+        return { cl: cl, counts: counts, n: n, rate: n ? U.pct(counts.present + counts.late + counts.activity, n) : null };
+      });
+
+    host.appendChild(Shell.card(
+      'Attendance by class',
+      '',
+      Charts.stackedRows({
+        nameHeader: 'Class',
+        rows: classRows.map(function (r) { return { name: r.cl.label, counts: r.counts, display: String(r.n) }; })
+      })
+    ));
+
+    host.appendChild(Shell.card(
+      'Attendance percentage by class',
+      'Present, late and activity as a share of all records.',
+      Charts.barList({
+        nameHeader: 'Class',
+        seriesLabel: 'Attendance rate',
+        max: 100,
+        rows: classRows.filter(function (r) { return r.rate !== null; })
+          .map(function (r) { return { name: r.cl.label, value: r.rate, display: r.rate + '%' }; })
+      })
+    ));
+
+    // ---- Lowest attendance ----
+    var ranked = rows.filter(function (r) { return r.stats.rate !== null; })
+      .sort(function (a, b) { return a.stats.rate - b.stats.rate; });
+
+    host.appendChild(Shell.card(
+      'Lowest attendance in the range',
+      'Look at these first.',
+      Charts.barList({
+        nameHeader: 'Learner',
+        seriesLabel: 'Attendance rate',
+        max: 100,
+        rows: ranked.slice(0, 10).map(function (r) {
+          return {
+            name: r.learner.name,
+            value: r.stats.rate,
+            display: r.stats.rate + '%',
+            tipRows: [
+              { label: 'Class', value: Store.classLabel(r.learner.classId) },
+              { label: 'Absent', value: r.stats.counts.absent },
+              { label: 'Late', value: r.stats.counts.late }
+            ]
+          };
+        })
+      })
+    ));
+
+    // ---- Full table ----
+    var tbody = el('tbody');
+    rows.slice().sort(function (a, b) { return a.learner.name.localeCompare(b.learner.name); })
+      .forEach(function (r) {
+        tbody.appendChild(el('tr', null, [
+          el('td', null, el('a', { href: 'learner.html?id=' + r.learner.id, style: 'color:inherit;font-weight:550', text: r.learner.name })),
+          el('td', { class: 'nowrap mono', text: r.learner.admissionNo }),
+          el('td', { class: 'nowrap', text: Store.classLabel(r.learner.classId) }),
+          el('td', { class: 'num', text: String(r.stats.total) }),
+          el('td', { class: 'num', text: String(r.stats.counts.present) }),
+          el('td', { class: 'num', text: String(r.stats.counts.late) }),
+          el('td', { class: 'num', text: String(r.stats.counts.absent) }),
+          el('td', { class: 'num', text: String(r.stats.counts.excused) }),
+          el('td', { class: 'num', style: 'font-weight:650', text: r.stats.rate === null ? '—' : r.stats.rate + '%' })
+        ]));
+      });
+
+    host.appendChild(Shell.card(
+      'Attendance by learner',
+      '',
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+        el('thead', null, el('tr', null, [
+          el('th', null, 'Learner'), el('th', null, 'Admission no.'), el('th', null, 'Class'),
+          el('th', { class: 'num' }, 'Days'), el('th', { class: 'num' }, 'Present'),
+          el('th', { class: 'num' }, 'Late'), el('th', { class: 'num' }, 'Absent'),
+          el('th', { class: 'num' }, 'Excused'), el('th', { class: 'num' }, 'Rate')
+        ])),
+        tbody
+      ]))
+    ));
+
+    // ---- Behaviour ----
+    var bsum = Store.behaviourSummary(s, {
+      from: state.from, to: state.to, classId: state.classId || null
+    });
+    host.appendChild(Shell.card(
+      'Behaviour entries in the range',
+      U.plural(bsum.total, 'entry', 'entries') + ' recorded.',
+      bsum.total
+        ? Charts.barList({
+            nameHeader: 'Category',
+            seriesLabel: 'Entries',
+            rows: SEED.BEHAVIOUR_ORDER.map(function (k) {
+              return { name: SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label, value: bsum.counts[k] };
+            })
+          })
+        : Shell.emptyState('No behaviour entries in this range.')
+    ));
+
+    // ---- Guardian participation ----
+    var expected = rows.length * rd.length;
+    var dep = 0, arr = 0;
+    rd.forEach(function (day) {
+      var ms = Store.movementSummary(s, day, state.classId || null);
+      dep += ms.departures; arr += ms.arrivals;
+    });
+    host.appendChild(Shell.card(
+      'Guardian participation',
+      'Share of days confirmed at each end.',
+      Charts.barList({
+        nameHeader: 'Confirmation',
+        seriesLabel: 'Confirmations',
+        max: expected || 1,
+        rows: [
+          { name: '→ Left home', value: dep, display: (expected ? U.pct(dep, expected) : 0) + '%' },
+          { name: '← Arrived home', value: arr, display: (expected ? U.pct(arr, expected) : 0) + '%' }
+        ]
+      })
+    ));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teacher dashboard — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['teacher'],
+    page: 'teacher-dashboard',
+    title: 'My teaching day',
+    sub: Store.db().school.name + ' · ' + Store.db().settings.term
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope, d = Store.db();
+  var date = Store.currentSchoolDay();
+
+  var banner = Shell.dayBanner(date);
+  if (banner) c.appendChild(banner);
+
+  var myClasses = Store.classes(s);
+  var roster = Store.learners(s, {});
+
+  // ---------------- Outstanding registers ----------------
+  var outstanding = sc.markableClassIds.filter(function (id) {
+    return Store.daySummary(s, date, id).unmarked > 0;
+  });
+  if (outstanding.length) {
+    c.appendChild(el('div', { class: 'notice notice-warning' }, [
+      el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚠' }),
+      el('span', { class: 'grow' }, [
+        el('strong', { text: 'Register outstanding. ' }),
+        el('span', { text: outstanding.map(Store.classLabel).join(', ') + ' has no attendance recorded for ' + U.longDate(date) + '.' })
+      ]),
+      el('a', { class: 'btn btn-sm btn-primary', href: 'teacher-attendance.html?class=' + outstanding[0] }, 'Take it now')
+    ]));
+  }
+
+  // ---------------- Today across my learners ----------------
+  var sum = Store.daySummary(s, date);
+  c.appendChild(Charts.statRow([
+    { label: 'My learners', value: roster.length, tone: 'accent', meta: myClasses.length + ' ' + (myClasses.length === 1 ? 'class' : 'classes') },
+    { label: 'Present', value: sum.present, tone: 'good', icon: '✓' },
+    { label: 'Late', value: sum.late, tone: 'warning', icon: '◴' },
+    { label: 'Absent', value: sum.absent, tone: 'critical', icon: '✕' },
+    { label: 'Excused', value: sum.excused, tone: 'serious', icon: '✉' },
+    { label: 'Not marked', value: sum.unmarked, tone: sum.unmarked ? 'warning' : 'good', icon: '–' }
+  ]));
+
+  var left = el('div', { class: 'grid', style: 'align-content:start' });
+  var right = el('div', { class: 'grid', style: 'align-content:start' });
+
+  // ---------------- My classes ----------------
+  var classBody = el('div');
+  myClasses.forEach(function (cl) {
+    var cs = Store.daySummary(s, date, cl.id);
+    var canMark = Store.mayMarkClass(s, cl.id);
+    var asg = d.teacherAssignments.filter(function (a) {
+      return a.classId === cl.id && sc.teacher && a.teacherId === sc.teacher.id;
+    })[0];
+    var taken = cs.unmarked === 0 && cs.total > 0;
+
+    classBody.appendChild(el('div', { class: 'register-row', style: 'padding-left:0;padding-right:0' }, [
+      el('div', null, [
+        el('div', { class: 'register-name', text: cl.label }),
+        el('div', { class: 'register-meta', text: (asg ? asg.role + ' · ' : '') + U.plural(cs.total, 'learner') })
+      ]),
+      el('div', { style: 'text-align:right' }, [
+        el('span', { class: 'badge ' + (taken ? 'badge-present' : 'badge-late') }, [
+          el('span', { class: 'dot', 'aria-hidden': 'true' }),
+          taken ? 'Register taken' : (canMark ? 'Register outstanding' : 'Not my register')
+        ]),
+        el('div', { style: 'margin-top:6px' },
+          canMark
+            ? el('a', { class: 'btn btn-sm', href: 'teacher-attendance.html?class=' + cl.id }, taken ? 'Review' : 'Take register')
+            : el('a', { class: 'btn btn-sm', href: 'teacher-learners.html?class=' + cl.id }, 'View learners'))
+      ])
+    ]));
+  });
+  left.appendChild(Shell.card('My classes today', 'Only a class teacher may take a register.', classBody));
+
+  // ---------------- Attendance mix across my classes ----------------
+  left.appendChild(Shell.card(
+    'Attendance by class',
+    U.longDate(date),
+    Charts.stackedRows({
+      nameHeader: 'Class',
+      rows: myClasses.map(function (cl) {
+        var cs = Store.daySummary(s, date, cl.id);
+        return { name: cl.label, counts: cs, display: String(cs.total) };
+      })
+    })
+  ));
+
+  // ---------------- Recent behaviour ----------------
+  var recentB = Store.behaviour(s, { from: U.addDays(date, -14), to: date }).slice(0, 6);
+  var bBody = el('div');
+  recentB.forEach(function (b) {
+    var l = Store.learner(s, b.learnerId);
+    bBody.appendChild(el('div', { style: 'padding:10px 0;border-bottom:1px solid var(--border)' }, [
+      el('div', { class: 'row-between' }, [
+        el('a', { style: 'font-size:.875rem;font-weight:600;color:inherit', href: 'learner.html?id=' + l.id, text: l.name }),
+        Shell.behaviourBadge(b.category)
+      ]),
+      el('div', { class: 'muted', style: 'font-size:.8rem;margin-top:3px', text: b.comment }),
+      el('div', { class: 'muted', style: 'font-size:.72rem;margin-top:2px',
+        text: U.relativeDay(b.date) + ' ' + b.time + ' · ' + Store.userName(b.recordedBy) })
+    ]));
+  });
+  left.appendChild(Shell.card(
+    'Recent behaviour entries',
+    'Last two weeks.',
+    recentB.length ? bBody : Shell.emptyState('No behaviour entries recorded recently.'),
+    el('a', { class: 'btn btn-sm', href: 'teacher-behaviour.html' }, 'Record one')
+  ));
+
+  // ---------------- Parent comments awaiting a reply ----------------
+  var threads = Store.threads(s, {}).filter(function (t) {
+    var last = t.replies.length ? t.replies[t.replies.length - 1] : t.root;
+    var author = Store.userById(last.authorId);
+    return author && author.role === 'parent';
+  });
+  var tBody = el('div');
+  threads.slice(0, 5).forEach(function (t) {
+    var l = Store.learner(s, t.root.learnerId);
+    var last = t.replies.length ? t.replies[t.replies.length - 1] : t.root;
+    tBody.appendChild(el('div', { style: 'padding:11px 0;border-bottom:1px solid var(--border)' }, [
+      el('div', { class: 'row-between' }, [
+        el('span', { style: 'font-size:.85rem;font-weight:600', text: l.name }),
+        el('span', { class: 'muted', style: 'font-size:.72rem', text: U.relativeDay(last.date) })
+      ]),
+      el('div', { class: 'secondary', style: 'font-size:.82rem;margin-top:3px', text: last.text }),
+      el('div', { style: 'margin-top:8px' },
+        el('a', { class: 'btn btn-sm', href: 'messages.html?learner=' + l.id }, 'Reply'))
+    ]));
+  });
+  right.appendChild(Shell.card(
+    'Awaiting your reply',
+    threads.length ? U.plural(threads.length, 'conversation') + ' where a guardian spoke last.' : null,
+    threads.length ? tBody : Shell.emptyState('Nothing awaiting a reply.'),
+    el('a', { class: 'btn btn-sm', href: 'messages.html' }, 'All messages')
+  ));
+
+  // ---------------- Notifications ----------------
+  var notes = Store.notifications(s).slice(0, 6);
+  var nBody = el('div');
+  var ICON = { absent: '✕', late: '◴', behaviour: '★', register: '⚠', announcement: '📣', comment: '✉', reply: '✉' };
+  notes.forEach(function (n) {
+    nBody.appendChild(el('div', { class: 'notif' + (n.read ? '' : ' unread'), style: 'padding-left:0;padding-right:0' }, [
+      el('span', { class: 'notif-icon', 'aria-hidden': 'true', text: ICON[n.type] || '•' }),
+      el('span', null, [
+        el('div', { class: 'notif-title', text: n.title }),
+        el('div', { class: 'notif-text', text: n.message }),
+        el('div', { class: 'notif-time', text: U.relativeDay(n.date) + ' ' + n.time })
+      ])
+    ]));
+  });
+  right.appendChild(Shell.card(
+    'Notifications',
+    null,
+    notes.length ? nBody : Shell.emptyState('Nothing new.'),
+    el('a', { class: 'btn btn-sm', href: 'notifications.html' }, 'All')
+  ));
+
+  c.appendChild(el('div', { class: 'split-2-1' }, [left, right]));
+})();
+</script>
+</body>
+</html>

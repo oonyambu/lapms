@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My learners — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['teacher'],
+    page: 'teacher-learners',
+    title: 'My learners',
+    sub: 'Only your authorised learners'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope, d = Store.db();
+  var date = Store.currentSchoolDay();
+  var termFrom = Store.termDays()[0];
+
+  var state = { q: '', classId: U.qs('class') || '' };
+
+  var qInput = el('input', { type: 'search', id: 'q', placeholder: 'Name or admission number' });
+  var clsSel = el('select', { id: 'cls' }, [el('option', { value: '' }, 'All my classes')].concat(
+    Store.classes(s).map(function (cl) {
+      return el('option', { value: cl.id, selected: cl.id === state.classId ? true : null }, cl.label);
+    })));
+  qInput.addEventListener('input', function () { state.q = qInput.value; render(); });
+  clsSel.addEventListener('change', function () { state.classId = clsSel.value; render(); });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field', style: 'flex:1 1 240px' }, [el('label', { for: 'q' }, 'Search'), qInput]),
+    el('div', { class: 'field' }, [el('label', { for: 'cls' }, 'Class'), clsSel])
+  ]));
+
+  var scopeNote = el('div', { class: 'notice' }, [
+    el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚿' }),
+    el('span', { text: 'You can reach ' + sc.learnerIds.length + ' of the school’s ' + d.learners.length +
+      ' learners, through ' + U.plural(sc.classIds.length, 'class', 'classes') +
+      (sc.markableClassIds.length
+        ? ' — and may take the register for ' + sc.markableClassIds.map(Store.classLabel).join(', ') + '.'
+        : ' — you are not a class teacher, so you cannot take a register.') })
+  ]);
+  c.appendChild(scopeNote);
+
+  var host = el('div');
+  c.appendChild(host);
+
+  function render() {
+    U.clear(host);
+    var list = Store.learners(s, { q: state.q || null, classId: state.classId || null });
+
+    var tbody = el('tbody');
+    list.forEach(function (l) {
+      var st = Store.learnerStats(s, l.id, termFrom, date);
+      var today = Store.attendanceFor(s, l.id, date);
+      var dep = Store.movementFor(s, l.id, date, 'departure');
+      tbody.appendChild(el('tr', null, [
+        el('td', null, Shell.learnerLink(l, l.admissionNo)),
+        el('td', { class: 'nowrap', text: Store.classLabel(l.classId) }),
+        el('td', null, Shell.statusBadge(today ? today.status : null)),
+        el('td', { class: 'nowrap muted', style: 'font-size:.8rem', text: dep ? '→ ' + dep.time : '—' }),
+        el('td', { class: 'num', text: st.rate === null ? '—' : st.rate + '%' }),
+        el('td', { class: 'num', text: String(st.counts.absent) }),
+        el('td', { class: 'num', text: String(st.counts.late) }),
+        el('td', null, el('a', { class: 'btn btn-sm', href: 'learner.html?id=' + l.id }, 'Open'))
+      ]));
+    });
+
+    host.appendChild(el('div', { class: 'card card-pad-0' },
+      list.length
+        ? el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+            el('thead', null, el('tr', null, [
+              el('th', null, 'Learner'), el('th', null, 'Class'), el('th', null, 'Today'),
+              el('th', null, 'Left home'), el('th', { class: 'num' }, 'Attendance'),
+              el('th', { class: 'num' }, 'Absences'), el('th', { class: 'num' }, 'Late'), el('th', null, '')
+            ])),
+            tbody
+          ]))
+        : el('div', { style: 'padding:20px' }, Shell.emptyState('No learners match this search.'))
+    ));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

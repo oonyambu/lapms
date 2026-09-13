@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>General report — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+<style>
+  .report-head { display: none; }
+  .rate-cell { font-weight: 600; }
+  @media print {
+    @page { size: A4 landscape; margin: 12mm; }
+    :root { color-scheme: light; }
+    .app { display: block; }
+    .sidebar, .topbar, .filters, .no-print { display: none !important; }
+    .content { padding: 0; }
+    .report-head { display: block; margin-bottom: 14px; }
+    .card { border: 0; padding: 0; }
+    table.data { font-size: 10.5px; }
+    table.data th, table.data td { padding: 4px 6px; }
+    table.data thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin', 'teacher'],
+    page: 'report-general',
+    title: 'General report',
+    sub: 'Weekly or monthly, ready to print'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), d = Store.db();
+  var today = Store.currentSchoolDay();
+
+  var state = { span: 'week', classId: '', end: today };
+
+  function rangeFor() {
+    var from = state.span === 'week' ? U.addDays(state.end, -6) : U.addDays(state.end, -29);
+    return { from: from, to: state.end };
+  }
+
+  var spanSel = el('select', { id: 'sp' }, [
+    el('option', { value: 'week' }, 'This week (7 days)'),
+    el('option', { value: 'month' }, 'This month (30 days)')
+  ]);
+  var clsSel = el('select', { id: 'cl' }, [el('option', { value: '' }, 'All classes')].concat(
+    Store.classes(s).map(function (cl) { return el('option', { value: cl.id }, cl.label); })));
+  var endI = el('input', { type: 'date', id: 'en', value: state.end, max: U.today() });
+
+  [spanSel, clsSel, endI].forEach(function (n) {
+    n.addEventListener('change', function () {
+      state.span = spanSel.value; state.classId = clsSel.value; state.end = endI.value;
+      render();
+    });
+  });
+
+  var printBtn = el('button', { class: 'btn btn-sm btn-primary no-print', type: 'button' }, '🖨 Print');
+  printBtn.addEventListener('click', function () { window.print(); });
+
+  var csvBtn = el('button', { class: 'btn btn-sm no-print', type: 'button' }, 'Export CSV');
+
+  c.appendChild(el('div', { class: 'filters no-print' }, [
+    el('div', { class: 'field' }, [el('label', { for: 'sp' }, 'Period'), spanSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'cl' }, 'Class'), clsSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'en' }, 'Ending'), endI]),
+    el('div', { class: 'grow' }),
+    csvBtn, printBtn
+  ]));
+
+  var host = el('div');
+  c.appendChild(host);
+
+  function rows() {
+    var r = rangeFor();
+    return Store.learners(s, state.classId ? { classId: state.classId } : {}).map(function (l) {
+      var day = Store.learnerStats(s, l.id, r.from, r.to);
+      var les = Store.lessonStats(s, l.id, r.from, r.to);
+      var rate = Store.ratings(s, l.id, r.from, r.to);
+      return { learner: l, day: day, lesson: les, rating: rate };
+    });
+  }
+
+  csvBtn.addEventListener('click', function () {
+    var r = rangeFor();
+    var out = [['Admission no', 'Learner', 'Class', 'Room',
+      'Days present', 'Days absent', 'Days late',
+      'Lessons attended', 'Lessons missed', 'Lesson attendance %',
+      'Teacher rating', 'Parent rating']];
+    rows().forEach(function (x) {
+      var cls = Store.classById(x.learner.classId) || {};
+      out.push([x.learner.admissionNo, x.learner.name, cls.label || '', cls.room || '',
+        x.day.counts.present, x.day.counts.absent, x.day.counts.late,
+        x.lesson.attended, x.lesson.missed, x.lesson.rate === null ? '' : x.lesson.rate,
+        x.rating.teacher.label, x.rating.parent.label]);
+    });
+    U.downloadCsv('lapms-' + state.span + '-report-' + r.from + '-to-' + r.to + '.csv', out);
+    Store.audit(s, 'Exported general report',
+      (state.classId ? Store.classLabel(state.classId) : 'Whole school') + ' — ' + r.from + ' to ' + r.to);
+    Store.save();
+    U.toast('Report exported');
+  });
+
+  function ratingCell(r) {
+    if (!r.key) return el('td', { class: 'muted', text: '—' });
+    var meta = SEED.BEHAVIOUR[r.key];
+    var tone = meta.rank >= 4 ? 'badge-present' : meta.rank === 3 ? 'badge-neutral'
+      : meta.rank === 2 ? 'badge-excused' : 'badge-absent';
+    return el('td', { class: 'rate-cell' }, el('span', { class: 'badge ' + tone }, [
+      el('span', { 'aria-hidden': 'true', text: meta.icon }),
+      el('span', { text: meta.label }),
+      r.count > 1 ? el('span', { class: 'muted', text: ' ×' + r.count }) : null
+    ]));
+  }
+
+  function render() {
+    U.clear(host);
+    var r = rangeFor();
+    var list = rows();
+
+    // Printed letterhead
+    host.appendChild(el('div', { class: 'report-head' }, [
+      el('h1', { style: 'font-size:18px;margin:0', text: d.school.name }),
+      el('div', { style: 'font-size:11px' },
+        d.school.address + ' · ' + d.school.phone + ' · ' + d.school.email),
+      el('h2', { style: 'font-size:14px;margin:10px 0 2px' },
+        (state.span === 'week' ? 'Weekly' : 'Monthly') + ' general report — ' +
+        (state.classId ? Store.classLabel(state.classId) : 'Whole school')),
+      el('div', { style: 'font-size:11px' },
+        U.longDate(r.from) + ' to ' + U.longDate(r.to) + ' · ' + d.settings.term)
+    ]));
+
+    host.appendChild(el('div', { class: 'no-print' }, [
+      el('h2', { style: 'font-size:1.1rem;margin-bottom:2px' },
+        (state.span === 'week' ? 'Weekly' : 'Monthly') + ' general report'),
+      el('p', { class: 'muted', style: 'font-size:.82rem' },
+        U.longDate(r.from) + ' to ' + U.longDate(r.to) + ' · ' +
+        (state.classId ? Store.classLabel(state.classId) : 'All classes') + ' · ' +
+        U.plural(list.length, 'learner'))
+    ]));
+
+    // Totals
+    var tot = { attended: 0, missed: 0, absentDays: 0, lateDays: 0 };
+    list.forEach(function (x) {
+      tot.attended += x.lesson.attended; tot.missed += x.lesson.missed;
+      tot.absentDays += x.day.counts.absent; tot.lateDays += x.day.counts.late;
+    });
+    host.appendChild(el('div', { class: 'no-print', style: 'margin:16px 0' }, Charts.statRow([
+      { label: 'Learners', value: list.length, tone: 'accent' },
+      { label: 'Lessons attended', value: tot.attended, tone: 'good', icon: '✓' },
+      { label: 'Lessons missed', value: tot.missed, tone: 'critical', icon: '✕' },
+      { label: 'Days absent', value: tot.absentDays, tone: 'critical', icon: '✕' },
+      { label: 'Days late', value: tot.lateDays, tone: 'warning', icon: '◴' }
+    ])));
+
+    // The table
+    var tbody = el('tbody');
+    list.forEach(function (x) {
+      var cls = Store.classById(x.learner.classId) || {};
+      tbody.appendChild(el('tr', null, [
+        el('td', { class: 'mono nowrap', text: x.learner.admissionNo }),
+        el('td', { style: 'font-weight:550', text: x.learner.name }),
+        el('td', { class: 'nowrap', text: cls.label || '' }),
+        el('td', { class: 'nowrap muted', style: 'font-size:.78rem', text: cls.room || '' }),
+        el('td', { class: 'num', text: String(x.day.counts.present) }),
+        el('td', { class: 'num', text: String(x.day.counts.late) }),
+        el('td', { class: 'num', text: String(x.day.counts.absent) }),
+        el('td', { class: 'num', style: 'font-weight:650', text: String(x.lesson.attended) }),
+        el('td', { class: 'num', text: String(x.lesson.missed) }),
+        el('td', { class: 'num', text: x.lesson.rate === null ? '—' : x.lesson.rate + '%' }),
+        ratingCell(x.rating.teacher),
+        ratingCell(x.rating.parent)
+      ]));
+    });
+
+    host.appendChild(el('div', { class: 'card card-pad-0', style: 'margin-top:8px' },
+      list.length
+        ? el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+            el('thead', null, [
+              el('tr', null, [
+                el('th', { colspan: '4' }, 'Learner'),
+                el('th', { colspan: '3', class: 'num' }, 'Days'),
+                el('th', { colspan: '3', class: 'num' }, 'Lessons'),
+                el('th', { colspan: '2' }, 'Comments / rating')
+              ]),
+              el('tr', null, [
+                el('th', null, 'Adm. no'), el('th', null, 'Name'), el('th', null, 'Class'), el('th', null, 'Room'),
+                el('th', { class: 'num' }, 'Present'), el('th', { class: 'num' }, 'Late'), el('th', { class: 'num' }, 'Absent'),
+                el('th', { class: 'num' }, 'Attended'), el('th', { class: 'num' }, 'Missed'), el('th', { class: 'num' }, 'Rate'),
+                el('th', null, 'Teachers'), el('th', null, 'Parents')
+              ])
+            ]),
+            tbody
+          ]))
+        : el('div', { style: 'padding:20px' }, Shell.emptyState('No learners in this selection.'))
+    ));
+
+    // Signature strip for the printed copy
+    host.appendChild(el('div', { class: 'report-head', style: 'margin-top:18px;font-size:11px' },
+      'Class teacher: ______________________     Head teacher: ______________________     Date: ____________'));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learner profile — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({ roles: ['admin', 'teacher', 'parent'], page: null, title: 'Learner profile' });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope;
+  var id = U.qs('id');
+  var l = Store.learner(s, id);
+
+  // The store returns null for a learner outside the session's scope, whatever
+  // the URL says. This is the check that matters, not hiding the link.
+  if (!l) {
+    Shell.denied(c, 'This account is not authorised to view that learner. If you believe this is wrong, contact the school office.');
+    return;
+  }
+
+  m.topbar.querySelector('h1').textContent = l.name;
+  m.topbar.querySelector('.topbar-sub') ||
+    m.topbar.querySelector('.grow').appendChild(el('div', { class: 'topbar-sub',
+      text: Store.classLabel(l.classId) + ' · ' + l.admissionNo }));
+
+  var date = Store.currentSchoolDay();
+  var termFrom = Store.termDays()[0];
+  var stats = Store.learnerStats(s, l.id, termFrom, date);
+  var canRecord = sc.role === 'teacher' || sc.role === 'admin';
+
+  var left = el('div', { class: 'grid', style: 'align-content:start' });
+  var right = el('div', { class: 'grid', style: 'align-content:start' });
+
+  // ---------------- Identity (section 6) ----------------
+  var todayRec = Store.attendanceFor(s, l.id, date);
+  var idCard = el('section', { class: 'card' }, [
+    el('div', { class: 'row', style: 'gap:14px;margin-bottom:16px' }, [
+      el('span', { class: 'avatar avatar-lg', 'aria-hidden': 'true', text: U.initials(l.name) }),
+      el('div', { class: 'grow' }, [
+        el('h2', { style: 'font-size:1.15rem;margin:0', text: l.name }),
+        el('div', { class: 'muted', style: 'font-size:.82rem',
+          text: Store.classLabel(l.classId) + ' · ' + l.admissionNo })
+      ]),
+      Shell.statusBadge(todayRec ? todayRec.status : null)
+    ])
+  ]);
+
+  var facts = [
+    ['Admission number', l.admissionNo],
+    ['Class and stream', Store.classLabel(l.classId)],
+    ['Date of birth', l.dateOfBirth],
+    ['Status', l.status === 'active' ? 'Active' : l.status],
+    ['Emergency contact', l.emergencyContact]
+  ];
+  // A photograph is collected only where lawful and necessary (section 6).
+  facts.push(['Photograph', l.photo ? 'On file' : 'Not collected']);
+
+  var dl = el('div', { style: 'font-size:.85rem' });
+  facts.forEach(function (f) {
+    dl.appendChild(el('div', { class: 'row-between', style: 'padding:7px 0;border-bottom:1px solid var(--border);gap:16px' }, [
+      el('span', { class: 'muted', text: f[0] }),
+      el('span', { style: 'font-weight:550;text-align:right', text: String(f[1]) })
+    ]));
+  });
+  idCard.appendChild(dl);
+
+  var guardians = Store.guardiansOf(s, l.id);
+  if (guardians.length) {
+    idCard.appendChild(el('h3', { style: 'font-size:.85rem;margin:18px 0 8px', text: 'Parent / guardian linkage' }));
+    guardians.forEach(function (g) {
+      idCard.appendChild(el('div', { class: 'row', style: 'gap:10px;padding:8px 0;border-bottom:1px solid var(--border)' }, [
+        el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(g.parent.name) }),
+        el('span', { class: 'grow', style: 'min-width:0' }, [
+          el('div', { style: 'font-size:.85rem;font-weight:550', text: g.parent.name }),
+          el('div', { class: 'muted', style: 'font-size:.75rem', text: g.link.relationship + ' · ' + g.parent.phone })
+        ]),
+        el('span', { class: 'badge ' + (g.link.authorized ? 'badge-present' : 'badge-late') }, [
+          el('span', { class: 'dot' }), g.link.authorized ? 'Authorised' : 'Pending'
+        ])
+      ]));
+    });
+  }
+  right.appendChild(idCard);
+
+  // ---------------- Attendance ----------------
+  left.appendChild(Shell.card(
+    'Attendance this term',
+    U.plural(stats.total, 'school day') + ' recorded from ' + U.shortDate(termFrom) + '.',
+    el('div', null, [
+      Charts.statRow([
+        { label: 'Attendance rate', value: stats.rate === null ? '—' : stats.rate + '%', tone: 'accent' },
+        { label: 'Present', value: stats.counts.present, tone: 'good', icon: '✓' },
+        { label: 'Late', value: stats.counts.late, tone: 'warning', icon: '◴' },
+        { label: 'Absent', value: stats.counts.absent, tone: 'critical', icon: '✕' },
+        { label: 'Excused', value: stats.counts.excused, tone: 'serious', icon: '✉' },
+        { label: 'Activity', value: stats.counts.activity, tone: 'accent', icon: '⚑' }
+      ]),
+      el('div', { style: 'margin-top:16px' }, Charts.stackedRows({
+        nameHeader: 'Learner',
+        rows: [{ name: l.name, counts: stats.counts, display: String(stats.total) }]
+      }))
+    ])
+  ));
+
+  // ---------------- Daily record: attendance + movement together ----------------
+  var days = Store.termDays(date).slice().reverse();
+  var tbody = el('tbody');
+  days.forEach(function (day) {
+    var a = Store.attendanceFor(s, l.id, day);
+    var dep = Store.movementFor(s, l.id, day, 'departure');
+    var arr = Store.movementFor(s, l.id, day, 'arrival');
+    tbody.appendChild(el('tr', null, [
+      el('td', { class: 'nowrap' }, U.shortDate(day)),
+      el('td', null, Shell.statusBadge(a ? a.status : null)),
+      el('td', { class: 'nowrap mono', text: a && a.time ? a.time : '—' }),
+      el('td', { class: 'nowrap mono', text: dep ? dep.time : '—' }),
+      el('td', { class: 'nowrap mono', text: arr ? arr.time : '—' }),
+      el('td', { class: 'muted', style: 'font-size:.8rem',
+        text: (a && a.note) || (dep && dep.comment) || (arr && arr.comment) || '' })
+    ]));
+  });
+  left.appendChild(Shell.card(
+    'Daily record',
+    'Attendance beside the guardian’s home confirmations.',
+    el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+      el('thead', null, el('tr', null, [
+        el('th', null, 'Date'), el('th', null, 'Attendance'), el('th', null, 'Arrived school'),
+        el('th', null, 'Left home'), el('th', null, 'Home again'), el('th', null, 'Note')
+      ])),
+      tbody
+    ]))
+  ));
+
+  // ---------------- Behaviour ----------------
+  var behaviourHost = el('div');
+  function renderBehaviour() {
+    U.clear(behaviourHost);
+    var recs = Store.behaviour(s, { learnerId: l.id });
+    if (!recs.length) { behaviourHost.appendChild(Shell.emptyState('No behaviour entries recorded.')); return; }
+    recs.forEach(function (b) {
+      behaviourHost.appendChild(el('div', { style: 'padding:11px 0;border-bottom:1px solid var(--border)' }, [
+        el('div', { class: 'row-between' }, [
+          Shell.behaviourBadge(b.category),
+          el('span', { class: 'muted', style: 'font-size:.75rem',
+            text: U.shortDate(b.date) + ' ' + b.time + ' · ' + Store.userName(b.recordedBy) })
+        ]),
+        el('div', { style: 'font-size:.875rem;margin-top:6px', text: b.comment })
+      ]));
+    });
+  }
+  renderBehaviour();
+
+  var behaviourAction = null;
+  if (canRecord) {
+    behaviourAction = el('button', { class: 'btn btn-sm', type: 'button' }, 'Add entry');
+    behaviourAction.addEventListener('click', function () {
+      var catSel = el('select', { id: 'bCat' }, SEED.BEHAVIOUR_ORDER.map(function (k) {
+        return el('option', { value: k }, SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label);
+      }));
+      var note = el('textarea', { id: 'bNote', placeholder: 'What was observed? Keep it factual and specific.' });
+      var share = el('input', { type: 'checkbox', id: 'bShare', checked: true, style: 'width:auto' });
+      var body = el('div', null, [
+        el('div', { class: 'field' }, [el('label', { for: 'bCat' }, 'Category'), catSel]),
+        el('div', { class: 'field' }, [el('label', { for: 'bNote' }, 'Comment'), note]),
+        el('div', { class: 'row' }, [share, el('label', { for: 'bShare', style: 'margin:0' }, 'Share with the guardian')])
+      ]);
+      U.modal('Record a behaviour entry for ' + l.name, body, {
+        actions: function (close) {
+          return [
+            el('button', { class: 'btn', onclick: close }, 'Cancel'),
+            el('button', {
+              class: 'btn btn-primary',
+              onclick: function () {
+                if (!note.value.trim()) { U.toast('Please add a comment'); return; }
+                try {
+                  Store.recordBehaviour(s, l.id, U.today(), catSel.value, note.value.trim(), share.checked);
+                  U.toast('Entry recorded');
+                  close(); renderBehaviour();
+                } catch (err) { U.toast('Not permitted: ' + err.message); }
+              }
+            }, 'Save entry')
+          ];
+        }
+      });
+    });
+  }
+  left.appendChild(Shell.card('Behaviour record',
+    'With the teacher responsible for each entry.',
+    behaviourHost, behaviourAction));
+
+  // ---------------- Conversation ----------------
+  var threadHost = el('div');
+  function renderThread() {
+    U.clear(threadHost);
+    var list = Store.comments(s, { learnerId: l.id });
+    if (!list.length) { threadHost.appendChild(Shell.emptyState('No comments yet.')); }
+    else {
+      var thread = el('div', { class: 'thread' });
+      list.forEach(function (cm) {
+        var author = Store.userById(cm.authorId);
+        thread.appendChild(el('div', { class: 'comment' + (cm.authorId === sc.userId ? ' mine' : '') }, [
+          el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(author ? author.name : '?') }),
+          el('div', { class: 'comment-body' }, [
+            el('div', { class: 'comment-head' }, [
+              el('span', { class: 'comment-author', text: author ? author.name : 'Unknown' }),
+              el('span', { class: 'badge badge-neutral', style: 'font-size:.66rem',
+                text: author ? Shell.ROLE_LABEL[author.role] : '' }),
+              el('span', { class: 'comment-time', text: U.relativeDay(cm.date) + ' ' + cm.time })
+            ]),
+            el('div', { class: 'comment-text', text: cm.text })
+          ])
+        ]));
+      });
+      threadHost.appendChild(thread);
+    }
+
+    var box = el('textarea', { placeholder: 'Write a comment…', 'aria-label': 'New comment' });
+    var send = el('button', { class: 'btn btn-primary btn-sm', type: 'button' }, 'Send');
+    send.addEventListener('click', function () {
+      if (!box.value.trim()) return;
+      try {
+        Store.addComment(s, l.id, box.value.trim(), null);
+        box.value = '';
+        U.toast('Comment sent');
+        renderThread();
+      } catch (err) { U.toast('Not permitted: ' + err.message); }
+    });
+    threadHost.appendChild(el('div', { style: 'margin-top:14px' }, [
+      box, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:8px' }, [send])
+    ]));
+  }
+  renderThread();
+  right.appendChild(Shell.card('Conversation',
+    'School and authorised guardians only.', threadHost));
+
+  c.appendChild(el('div', { class: 'split-2-1' }, [left, right]));
+})();
+</script>
+</body>
+</html>

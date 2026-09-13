@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classes &amp; staff — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin'],
+    page: 'admin-classes',
+    title: 'Classes & staff',
+    sub: 'Classes, streams and who teaches them'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), d = Store.db();
+  var date = Store.currentSchoolDay();
+
+  function classDialog(existing, presetForm) {
+    var forms = Store.classesByForm(s).map(function (g) { return g.form; });
+    var form = el('input', {
+      type: 'text', id: 'cn', placeholder: 'e.g. Grade 8 or Form 2', list: 'formList',
+      value: existing ? (existing.form || existing.name) : (presetForm || '')
+    });
+    var formList = el('datalist', { id: 'formList' }, forms.map(function (f) {
+      return el('option', { value: f });
+    }));
+    var stream = el('input', {
+      type: 'text', id: 'cs', placeholder: 'e.g. Nyati',
+      value: existing ? existing.stream : ''
+    });
+    var room = el('input', {
+      type: 'text', id: 'cr', placeholder: 'e.g. Block C, Room 3', list: 'roomList',
+      value: existing ? (existing.room || '') : ''
+    });
+    var roomList = el('datalist', { id: 'roomList' }, Store.rooms().map(function (r) {
+      return el('option', { value: r });
+    }));
+
+    U.modal(existing ? 'Edit ' + existing.label : 'Add a class', el('div', null, [
+      el('div', { class: 'field-row' }, [
+        el('div', { class: 'field' }, [el('label', { for: 'cn' }, 'Form or grade *'), form, formList]),
+        el('div', { class: 'field' }, [el('label', { for: 'cs' }, 'Stream *'), stream])
+      ]),
+      el('div', { class: 'field' }, [el('label', { for: 'cr' }, 'Room'), room, roomList]),
+      el('p', { class: 'hint', style: 'margin:0' },
+        'Reuse the same form with a different stream to add as many classes to it as you need. Academic year ' +
+        new Date().getFullYear() + '.')
+    ]), {
+      actions: function (close) {
+        return [
+          el('button', { class: 'btn', onclick: close }, 'Cancel'),
+          el('button', {
+            class: 'btn btn-primary',
+            onclick: function () {
+              if (!form.value.trim() || !stream.value.trim()) { U.toast('Form and stream are required'); return; }
+              try {
+                if (existing) {
+                  Store.updateClass(s, existing.id, {
+                    form: form.value.trim(), stream: stream.value.trim(), room: room.value.trim()
+                  });
+                  U.toast('Class updated');
+                } else {
+                  Store.addClass(s, form.value.trim(), stream.value.trim(), room.value.trim());
+                  U.toast('Class added');
+                }
+                close(); render();
+              } catch (err) { U.toast(err.message); }
+            }
+          }, existing ? 'Save' : 'Add class')
+        ];
+      }
+    });
+  }
+
+  var addClassBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button' }, 'Add a class');
+  addClassBtn.addEventListener('click', function () { classDialog(null, null); });
+
+  c.appendChild(el('div', { class: 'row-between' }, [
+    el('p', { class: 'page-intro', style: 'margin:0' },
+      'Only the class teacher may take a register. Subject teachers view and record behaviour.'),
+    addClassBtn
+  ]));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  function render() {
+    U.clear(host);
+
+    // ---------------- Classes, grouped by form ----------------
+    var classBody = el('div');
+    Store.classesByForm(s).forEach(function (group) {
+      classBody.appendChild(el('div', { class: 'row-between', style: 'margin:14px 0 2px' }, [
+        el('h3', { style: 'font-size:.9rem;margin:0' },
+          group.form + '  ' + U.plural(group.classes.length, 'stream')),
+        el('button', {
+          class: 'btn btn-sm', type: 'button',
+          onclick: function () { classDialog(null, group.form); }
+        }, '+ Stream in ' + group.form)
+      ]));
+      group.classes.forEach(function (cl) {
+      var roster = Store.learners(s, { classId: cl.id });
+      var sum = Store.daySummary(s, date, cl.id);
+      var asgs = d.teacherAssignments.filter(function (a) { return a.classId === cl.id; });
+
+      var chips = el('div', { class: 'row', style: 'flex-wrap:wrap;gap:6px;margin-top:8px' });
+      asgs.forEach(function (a) {
+        var t = d.teachers.filter(function (x) { return x.id === a.teacherId; })[0];
+        var chip = el('span', {
+          class: 'badge ' + (a.role === 'Class teacher' ? 'badge-accent' : 'badge-neutral'),
+          style: 'padding-right:4px'
+        }, [
+          el('span', { text: (t ? t.name : '?') + ' · ' + a.role }),
+          el('button', {
+            class: 'btn btn-ghost btn-sm', type: 'button', title: 'Remove assignment',
+            style: 'padding:0 5px;font-size:.7rem;color:inherit',
+            onclick: function () {
+              U.confirmBox('Remove assignment?',
+                (t ? t.name : 'This teacher') + ' will immediately lose access to ' + cl.label + '.',
+                function () { Store.removeAssignment(s, a.id); U.toast('Assignment removed'); render(); }, 'Remove');
+            }
+          }, '✕')
+        ]);
+        chips.appendChild(chip);
+      });
+      if (!asgs.length) {
+        chips.appendChild(el('span', { class: 'badge badge-absent' }, [el('span', { class: 'dot' }), 'No teacher assigned']));
+      }
+
+      classBody.appendChild(el('div', { style: 'padding:14px 0;border-bottom:1px solid var(--border)' }, [
+        el('div', { class: 'row-between' }, [
+          el('div', null, [
+            el('div', { style: 'font-weight:600', text: cl.label }),
+            el('div', { class: 'muted', style: 'font-size:.78rem',
+              text: (cl.room ? cl.room + ' · ' : 'No room set · ') +
+                U.plural(roster.length, 'learner') + ' · ' + cl.year })
+          ]),
+          el('div', { class: 'row' }, [
+            el('span', { class: 'badge ' + (sum.unmarked ? 'badge-late' : 'badge-present') }, [
+              el('span', { class: 'dot' }), sum.unmarked ? 'Register outstanding' : 'Register taken'
+            ]),
+            el('button', { class: 'btn btn-sm', type: 'button',
+              onclick: function () { classDialog(cl, null); } }, 'Edit'),
+            el('a', { class: 'btn btn-sm', href: 'admin-learners.html?class=' + cl.id }, 'Learners')
+          ])
+        ]),
+        chips
+      ]));
+      });
+    });
+    host.appendChild(Shell.card('Classes and streams', null, classBody));
+
+    // ---------------- Teachers ----------------
+    var tbody = el('tbody');
+    d.teachers.forEach(function (t) {
+      var user = Store.userById(t.userId);
+      var asgs = d.teacherAssignments.filter(function (a) { return a.teacherId === t.id; });
+      var learnerCount = 0;
+      asgs.forEach(function (a) { learnerCount += Store.learners(s, { classId: a.classId }).length; });
+
+      var assignSel = el('select', { style: 'width:auto;min-width:150px' },
+        [el('option', { value: '' }, 'Assign to a class…')].concat(
+          Store.classes(s).map(function (cl) { return el('option', { value: cl.id }, cl.label); })));
+      var roleSel = el('select', { style: 'width:auto;min-width:130px' },
+        ['Class teacher', 'Mathematics', 'English', 'Kiswahili', 'Science', 'Social Studies']
+          .map(function (r) { return el('option', { value: r }, r); }));
+      var go = el('button', { class: 'btn btn-sm', type: 'button' }, 'Assign');
+      go.addEventListener('click', function () {
+        if (!assignSel.value) { U.toast('Choose a class'); return; }
+        Store.assignTeacher(s, t.id, assignSel.value, roleSel.value);
+        U.toast('Assignment saved'); render();
+      });
+
+      tbody.appendChild(el('tr', null, [
+        el('td', null, el('div', { class: 'row', style: 'gap:10px' }, [
+          el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(t.name) }),
+          el('span', null, [
+            el('div', { style: 'font-weight:550;font-size:.875rem', text: t.name }),
+            el('div', { class: 'muted', style: 'font-size:.74rem', text: t.staffNo + (user ? ' · ' + user.phone : '') })
+          ])
+        ])),
+        el('td', null, asgs.length
+          ? el('div', { class: 'row', style: 'flex-wrap:wrap;gap:5px' }, asgs.map(function (a) {
+              return el('span', { class: 'badge ' + (a.role === 'Class teacher' ? 'badge-accent' : 'badge-neutral'),
+                text: Store.classLabel(a.classId) + ' · ' + a.role });
+            }))
+          : el('span', { class: 'muted', text: 'None' })),
+        el('td', { class: 'num', text: String(learnerCount) }),
+        el('td', null, el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, [assignSel, roleSel, go]))
+      ]));
+    });
+
+    host.appendChild(Shell.card(
+      'Teachers and their authorisations',
+      'Removing an assignment ends that access immediately.',
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+        el('thead', null, el('tr', null, [
+          el('th', null, 'Teacher'), el('th', null, 'Assigned classes'),
+          el('th', { class: 'num' }, 'Learners reachable'), el('th', null, 'Add an assignment')
+        ])),
+        tbody
+      ]))
+    ));
+
+    // ---------------- Class size comparison ----------------
+    host.appendChild(Shell.card(
+      'Class sizes',
+      'Learners enrolled in each class.',
+      Charts.barList({
+        nameHeader: 'Class',
+        seriesLabel: 'Learners',
+        rows: Store.classes(s).map(function (cl) {
+          return { name: cl.label, value: Store.learners(s, { classId: cl.id }).length };
+        })
+      })
+    ));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

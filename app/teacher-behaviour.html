@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Behaviour — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['teacher', 'admin'],
+    page: 'teacher-behaviour',
+    title: 'Behaviour',
+    sub: 'Positives as readily as concerns'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session();
+  var date = Store.currentSchoolDay();
+  var state = { classId: '', category: '', from: U.addDays(date, -30), to: date };
+
+  c.appendChild(el('p', { class: 'page-intro' },
+    'Every entry carries the date, time and teacher. Guardians may reply to anything shared with them.'));
+
+  // ---------------- Recording form ----------------
+  var learnerSel = el('select', { id: 'bl' });
+  var classFilter = el('select', { id: 'bc' }, [el('option', { value: '' }, 'All my classes')].concat(
+    Store.classes(s).map(function (cl) { return el('option', { value: cl.id }, cl.label); })));
+  var catSel = el('select', { id: 'bcat' }, SEED.BEHAVIOUR_ORDER.map(function (k) {
+    return el('option', { value: k, selected: k === 'good' ? true : null },
+      SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label);
+  }));
+  var noteBox = el('textarea', { id: 'bnote', placeholder: 'What happened? Be factual and specific — the guardian may read this.' });
+  var shareBox = el('input', { type: 'checkbox', id: 'bshare', checked: true, style: 'width:auto' });
+
+  function fillLearners() {
+    U.clear(learnerSel);
+    Store.learners(s, classFilter.value ? { classId: classFilter.value } : {}).forEach(function (l) {
+      learnerSel.appendChild(el('option', { value: l.id }, l.name + ' — ' + Store.classLabel(l.classId)));
+    });
+  }
+  classFilter.addEventListener('change', fillLearners);
+  fillLearners();
+
+  var saveBtn = el('button', { class: 'btn btn-primary', type: 'button' }, 'Record entry');
+  saveBtn.addEventListener('click', function () {
+    if (!learnerSel.value) { U.toast('Choose a learner'); return; }
+    if (!noteBox.value.trim()) { U.toast('Please add a comment'); return; }
+    try {
+      Store.recordBehaviour(s, learnerSel.value, U.today(), catSel.value, noteBox.value.trim(), shareBox.checked);
+      noteBox.value = '';
+      U.toast('Entry recorded' + (shareBox.checked ? ' and shared with the guardian' : ''));
+      renderList();
+    } catch (err) { U.toast('Not permitted: ' + err.message); }
+  });
+
+  c.appendChild(Shell.card('Record an entry', null, el('div', null, [
+    el('div', { class: 'field-row' }, [
+      el('div', { class: 'field' }, [el('label', { for: 'bc' }, 'Class'), classFilter]),
+      el('div', { class: 'field', style: 'flex:2 1 240px' }, [el('label', { for: 'bl' }, 'Learner'), learnerSel]),
+      el('div', { class: 'field' }, [el('label', { for: 'bcat' }, 'Category'), catSel])
+    ]),
+    el('div', { class: 'field' }, [el('label', { for: 'bnote' }, 'Comment'), noteBox]),
+    el('div', { class: 'row-between' }, [
+      el('div', { class: 'row', style: 'gap:8px' }, [
+        shareBox, el('label', { for: 'bshare', style: 'margin:0' }, 'Share with the guardian')
+      ]),
+      saveBtn
+    ])
+  ])));
+
+  // ---------------- History ----------------
+  var histClass = el('select', { id: 'hc' }, [el('option', { value: '' }, 'All my classes')].concat(
+    Store.classes(s).map(function (cl) { return el('option', { value: cl.id }, cl.label); })));
+  var histCat = el('select', { id: 'hcat' }, [el('option', { value: '' }, 'All categories')].concat(
+    SEED.BEHAVIOUR_ORDER.map(function (k) { return el('option', { value: k }, SEED.BEHAVIOUR[k].label); })));
+  var fromI = el('input', { type: 'date', id: 'hf', value: state.from });
+  var toI = el('input', { type: 'date', id: 'ht', value: state.to });
+  [histClass, histCat, fromI, toI].forEach(function (n) {
+    n.addEventListener('change', function () {
+      state.classId = histClass.value; state.category = histCat.value;
+      state.from = fromI.value; state.to = toI.value;
+      renderList();
+    });
+  });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field' }, [el('label', { for: 'hc' }, 'Class'), histClass]),
+    el('div', { class: 'field' }, [el('label', { for: 'hcat' }, 'Category'), histCat]),
+    el('div', { class: 'field' }, [el('label', { for: 'hf' }, 'From'), fromI]),
+    el('div', { class: 'field' }, [el('label', { for: 'ht' }, 'To'), toI])
+  ]));
+
+  var listHost = el('div', { class: 'grid' });
+  c.appendChild(listHost);
+
+  function renderList() {
+    U.clear(listHost);
+    var filter = {
+      classId: state.classId || null,
+      category: state.category || null,
+      from: state.from, to: state.to
+    };
+    var sum = Store.behaviourSummary(s, filter);
+
+    listHost.appendChild(Shell.card(
+      'Entries in this period',
+      U.plural(sum.total, 'entry', 'entries') + ' between ' + U.shortDate(state.from) + ' and ' + U.shortDate(state.to) + '.',
+      sum.total
+        ? Charts.barList({
+            nameHeader: 'Category',
+            seriesLabel: 'Entries',
+            rows: SEED.BEHAVIOUR_ORDER.map(function (k) {
+              return { name: SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label, value: sum.counts[k] };
+            })
+          })
+        : Shell.emptyState('No entries in this period.')
+    ));
+
+    if (!sum.total) return;
+
+    var body = el('div');
+    sum.records.forEach(function (b) {
+      var l = Store.learner(s, b.learnerId);
+      if (!l) return;
+      body.appendChild(el('div', { style: 'padding:12px 0;border-bottom:1px solid var(--border)' }, [
+        el('div', { class: 'row-between' }, [
+          el('div', { class: 'row', style: 'gap:10px' }, [
+            el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(l.name) }),
+            el('span', null, [
+              el('a', { href: 'learner.html?id=' + l.id, style: 'color:inherit;font-weight:600;font-size:.875rem', text: l.name }),
+              el('div', { class: 'muted', style: 'font-size:.74rem', text: Store.classLabel(l.classId) })
+            ])
+          ]),
+          el('div', { style: 'text-align:right' }, [
+            Shell.behaviourBadge(b.category),
+            el('div', { class: 'muted', style: 'font-size:.72rem;margin-top:4px',
+              text: U.shortDate(b.date) + ' ' + b.time + ' · ' + Store.userName(b.recordedBy) })
+          ])
+        ]),
+        el('div', { style: 'font-size:.875rem;margin-top:7px', text: b.comment }),
+        el('div', { style: 'margin-top:6px' },
+          el('span', { class: 'badge ' + (b.sharedWithParent ? 'badge-accent' : 'badge-neutral'), style: 'font-size:.66rem' },
+            b.sharedWithParent ? 'Shared with the guardian' : 'Internal to the school'))
+      ]));
+    });
+    listHost.appendChild(Shell.card('Entry history', null, body));
+  }
+
+  renderList();
+})();
+</script>
+</body>
+</html>

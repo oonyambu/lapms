@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en" data-base="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blueprint — LAPMS</title>
+<meta name="description" content="Functional and technical blueprint for the Learner Attendance & Parent Monitoring System: roles, workflow, data model, security and delivery scope.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/site.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">LA</span>
+      <span>
+        <span class="brand-name">LAPMS</span>
+        <span class="brand-sub">Attendance &amp; monitoring</span>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="index.html">Overview</a>
+      <a href="blueprint.html" aria-current="page">Blueprint</a>
+      <a href="privacy.html" class="hide-sm">Privacy</a>
+      <a class="btn btn-primary btn-sm" href="login.html">Open the demo</a>
+      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle>☀</button>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="wrap doc-layout">
+
+  <nav class="doc-toc" aria-label="On this page">
+    <div class="doc-toc-title">On this page</div>
+    <a href="#purpose">1. Purpose</a>
+    <a href="#roles">2. Roles and access</a>
+    <a href="#modules">3. Modules</a>
+    <a href="#workflow">4. Daily workflow</a>
+    <a href="#profile">5. Learner profile</a>
+    <a href="#behaviour">6. Behaviour</a>
+    <a href="#notifications">7. Notifications</a>
+    <a href="#data">8. Data model</a>
+    <a href="#security">9. Security &amp; privacy</a>
+    <a href="#technology">10. Technology</a>
+    <a href="#mvp">11. Delivery scope</a>
+    <a href="#roadmap">12. Future expansion</a>
+    <a href="#naming">13. Naming</a>
+  </nav>
+
+  <article class="doc-body">
+
+    <p class="eyebrow">Functional &amp; technical blueprint</p>
+    <h1>Learner Attendance &amp; Parent Monitoring System</h1>
+    <p style="font-size:1.05rem;color:var(--text-secondary)">
+      Daily attendance for schools, home-to-school-to-home confirmation for guardians, and a
+      strict rule about who may see what.
+    </p>
+
+    <h2 id="purpose">1. Purpose</h2>
+    <p>The system exists to do nine things well:</p>
+    <ol>
+      <li>Record daily learner attendance accurately and efficiently.</li>
+      <li>Let teachers mark learners Present, Absent, Late or Excused.</li>
+      <li>Let guardians confirm when a child leaves home and when they return.</li>
+      <li>Give teachers and guardians a structured channel for comments on behaviour.</li>
+      <li>Give teachers access only to learner information their responsibilities require.</li>
+      <li>Ensure guardians access only information belonging to their own children.</li>
+      <li>Generate attendance, lateness and behaviour reports for school management.</li>
+      <li>Provide timely notifications to guardians and staff where necessary.</li>
+      <li>Protect learner and family information through strong privacy and security controls.</li>
+    </ol>
+    <p>Points 3 and 6 together are the point: the whole journey, visible only to those entitled to see it.</p>
+
+    <h2 id="roles">2. Roles and access</h2>
+    <p>Three roles, with a deliberately narrow definition of what each may reach.</p>
+
+    <h3>Administrator</h3>
+    <p>
+      Head teacher, deputy, school office. Registration, every record, reports, settings and the audit log.
+    </p>
+
+    <h3>Teacher</h3>
+    <p>
+      Only the learners in their assigned classes. The assignment also carries a role, and that
+      distinction matters: a <strong>class teacher</strong> takes the register; a <strong>subject
+      teacher</strong> on the same class may view learners and record behaviour, but not attendance.
+      Remove the assignment and the access ends at once.
+    </p>
+
+    <h3>Parent / Guardian</h3>
+    <p>
+      Only learners linked to them by an authorised, school-verified link. They confirm departure
+      and arrival, see attendance and lateness, read and reply to shared behaviour notes, and update
+      their own contact details. Nothing else — no other learner, no other guardian.
+    </p>
+
+    <div class="card card-pad-0" style="margin:24px 0">
+      <div class="table-scroll">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th scope="col">Function / information</th>
+              <th scope="col">Administrator</th>
+              <th scope="col">Teacher</th>
+              <th scope="col">Parent / Guardian</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">All learners</th><td>Full access</td><td>Authorised learners</td><td>No access</td></tr>
+            <tr><th scope="row">Own child</th><td>Full access</td><td>If authorised</td><td>Full access</td></tr>
+            <tr><th scope="row">Attendance</th><td>Full access</td><td>Record / view</td><td>Own child</td></tr>
+            <tr><th scope="row">Behaviour records</th><td>Full access</td><td>Record / view</td><td>Own child</td></tr>
+            <tr><th scope="row">Parent comments</th><td>View</td><td>View / respond where authorised</td><td>Own child</td></tr>
+            <tr><th scope="row">Reports</th><td>Full access</td><td>Class / assigned reports</td><td>Own child</td></tr>
+            <tr><th scope="row">Other guardians&rsquo; information</th><td>Authorised</td><td>No access</td><td>No access</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <h2 id="modules">3. Modules</h2>
+
+    <h3>3.1 School administration</h3>
+    <ul>
+      <li>Create and manage the school profile.</li>
+      <li>Register classes, streams and academic terms.</li>
+      <li>Register learners and assign admission numbers.</li>
+      <li>Register teachers and assign them to classes and subjects.</li>
+      <li>Register guardians and link them to their children.</li>
+      <li>Manage user roles and permissions.</li>
+      <li>View school-wide attendance statistics.</li>
+      <li>Generate and export attendance and behaviour reports.</li>
+      <li>Maintain an audit log of important actions and changes.</li>
+    </ul>
+
+    <h3>3.2 Teacher module</h3>
+    <ul>
+      <li>Secure sign-in.</li>
+      <li>View assigned classes and learners.</li>
+      <li>Take the daily register; mark Present, Absent, Late, Excused or School activity.</li>
+      <li>Record arrival time where the school requires it.</li>
+      <li>Record behaviour: positive observations, concerns and incidents.</li>
+      <li>View attendance history for authorised learners.</li>
+      <li>Respond to relevant guardian comments.</li>
+      <li>Receive alerts and school announcements.</li>
+    </ul>
+
+    <h3>3.3 Parent / guardian module</h3>
+    <ul>
+      <li>Secure sign-in.</li>
+      <li>View only the linked child or children.</li>
+      <li>Confirm and comment when a child leaves home for school.</li>
+      <li>Confirm and comment when the child returns home.</li>
+      <li>View daily and historical attendance, lateness and absence.</li>
+      <li>View authorised teacher behaviour comments and respond to them.</li>
+      <li>Receive notifications about attendance, lateness, behaviour and school messages.</li>
+      <li>Update approved contact details.</li>
+    </ul>
+
+    <h2 id="workflow">4. The daily home &rarr; school &rarr; home workflow</h2>
+
+    <figure class="shot" style="margin:22px 0;aspect-ratio:21/9">
+      <img src="assets/img/pupils.jpg" alt="Pupils outside Shela Primary School, Lamu County, Kenya."
+           width="1400" height="933" loading="lazy">
+      <span class="shot-credit">Queen Asali,
+        <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></span>
+    </figure>
+
+    <div class="flow" style="margin:20px 0">
+      <div class="flow-step">
+        <span class="flow-actor">Guardian</span>
+        <h3>Child leaves home</h3>
+        <p>Records &ldquo;left home for school&rdquo; with the time and an optional comment.</p>
+      </div>
+      <div class="flow-step">
+        <span class="flow-actor">Teacher</span>
+        <h3>Child arrives at school</h3>
+        <p>The class teacher records attendance for the whole class.</p>
+      </div>
+      <div class="flow-step">
+        <span class="flow-actor">System</span>
+        <h3>Attendance alert</h3>
+        <p>If a learner is not marked present by the cut-off, the guardian is notified.</p>
+      </div>
+      <div class="flow-step">
+        <span class="flow-actor">School</span>
+        <h3>School departure</h3>
+        <p>Optionally, release from school is recorded at the end of the day.</p>
+      </div>
+      <div class="flow-step">
+        <span class="flow-actor">Guardian</span>
+        <h3>Child arrives home</h3>
+        <p>Confirms the child is home, with the time and an optional comment.</p>
+      </div>
+      <div class="flow-step">
+        <span class="flow-actor">System</span>
+        <h3>Daily record</h3>
+        <p>The complete authorised record is stored for reporting and follow-up.</p>
+      </div>
+    </div>
+    <p>
+      <strong>The gap this closes.</strong> A confirmed departure with no arrival on the register means
+      a child who left home and did not reach school. The register screen lists exactly those learners
+      before it can be submitted, and the cut-off alert raises it even if nobody looks.
+    </p>
+
+    <h2 id="profile">5. Learner profile</h2>
+    <p>Each learner record holds:</p>
+    <ul>
+      <li>Admission number and full name</li>
+      <li>Class and stream</li>
+      <li>Date of birth</li>
+      <li>A photograph <em>only where lawfully collected and necessary</em></li>
+      <li>Parent/guardian linkage and relationship</li>
+      <li>Emergency contact information</li>
+      <li>Attendance history and late-coming history</li>
+      <li>Behaviour records, teacher comments and guardian comments</li>
+      <li>Other school information the school approves</li>
+    </ul>
+
+    <h2 id="behaviour">6. Behaviour monitoring</h2>
+    <p>
+      Structured and deliberately unloaded: no judgemental labels, and positives recorded as readily
+      as concerns.
+    </p>
+    <div class="row" style="flex-wrap:wrap;gap:8px;margin:14px 0">
+      <span class="badge badge-present">★ Excellent / Positive</span>
+      <span class="badge badge-present">✓ Good</span>
+      <span class="badge badge-neutral">○ Satisfactory</span>
+      <span class="badge badge-excused">▲ Needs improvement</span>
+      <span class="badge badge-absent">! Serious concern</span>
+    </div>
+    <p>Every entry carries a free-text comment, the date and time, and the teacher responsible. A guardian may respond where the entry has been shared with them.</p>
+
+    <h3>Attendance categories</h3>
+    <div class="row" style="flex-wrap:wrap;gap:8px;margin:14px 0">
+      <span class="badge badge-present"><span class="dot"></span>✓ Present</span>
+      <span class="badge badge-absent"><span class="dot"></span>✕ Absent</span>
+      <span class="badge badge-late"><span class="dot"></span>◴ Late</span>
+      <span class="badge badge-excused"><span class="dot"></span>✉ Excused</span>
+      <span class="badge badge-activity"><span class="dot"></span>⚑ School activity (optional)</span>
+    </div>
+
+    <h2 id="notifications">7. Notifications</h2>
+    <ul>
+      <li>Learner marked absent</li>
+      <li>Learner marked late</li>
+      <li>Attendance not recorded by the defined cut-off time</li>
+      <li>A teacher records a behaviour concern</li>
+      <li>A teacher responds to a guardian comment</li>
+      <li>School announcements</li>
+      <li>Emergency notifications</li>
+      <li>Optional confirmation when a learner is released from school</li>
+    </ul>
+    <p>
+      Each notification is addressed to one recipient. Guardian notifications go only to an authorised guardian.
+    </p>
+
+    <h2 id="data">8. Data model</h2>
+    <p>
+      Thirteen tables. <code>parent_learner_links</code> and <code>teacher_assignments</code> carry the
+      authorisation rules — every access decision resolves through one of them.
+    </p>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>users</span><span class="muted">accounts and roles</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">user_id</span><span class="schema-field">name</span>
+        <span class="schema-field">phone</span><span class="schema-field">email</span>
+        <span class="schema-field">password_hash</span><span class="schema-field">role</span>
+        <span class="schema-field">status</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>schools</span><span class="muted">profile and settings</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">school_id</span><span class="schema-field">school_name</span>
+        <span class="schema-field">contacts</span><span class="schema-field">location</span>
+        <span class="schema-field">settings</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>learners</span><span class="muted">the learner record</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">learner_id</span><span class="schema-field">admission_no</span>
+        <span class="schema-field">name</span><span class="schema-field">class_id</span>
+        <span class="schema-field">photo</span><span class="schema-field">status</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>parents_guardians</span><span class="muted">guardian details</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">parent_id</span><span class="schema-field">user_id</span>
+        <span class="schema-field">name</span><span class="schema-field">contact_details</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>parent_learner_links</span><span class="badge badge-accent" style="font-size:.62rem">authorisation</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">link_id</span><span class="schema-field">parent_id</span>
+        <span class="schema-field">learner_id</span><span class="schema-field">relationship</span>
+        <span class="schema-field">authorization_status</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>teachers</span><span class="muted">staff records</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">teacher_id</span><span class="schema-field">user_id</span>
+        <span class="schema-field">staff_details</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>classes</span><span class="muted">classes and streams</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">class_id</span><span class="schema-field">name</span>
+        <span class="schema-field">stream</span><span class="schema-field">academic_year</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>teacher_assignments</span><span class="badge badge-accent" style="font-size:.62rem">authorisation</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">assignment_id</span><span class="schema-field">teacher_id</span>
+        <span class="schema-field">class_id</span><span class="schema-field">subject_or_role</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>attendance</span><span class="muted">one row per learner per day</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">attendance_id</span><span class="schema-field">learner_id</span>
+        <span class="schema-field">date</span><span class="schema-field">status</span>
+        <span class="schema-field">time</span><span class="schema-field">marked_by</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>home_movement</span><span class="muted">guardian confirmations</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">movement_id</span><span class="schema-field">learner_id</span>
+        <span class="schema-field">date</span><span class="schema-field">type</span>
+        <span class="schema-field">time</span><span class="schema-field">confirmed_by</span>
+        <span class="schema-field">comment</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>behaviour_records</span><span class="muted">observations and concerns</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">record_id</span><span class="schema-field">learner_id</span>
+        <span class="schema-field">date</span><span class="schema-field">category</span>
+        <span class="schema-field">comment</span><span class="schema-field">recorded_by</span>
+        <span class="schema-field">shared_with_parent</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>parent_comments</span><span class="muted">the conversation</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">comment_id</span><span class="schema-field">learner_id</span>
+        <span class="schema-field">date</span><span class="schema-field">comment</span>
+        <span class="schema-field">author_id</span><span class="schema-field">reply_to</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>notifications</span><span class="muted">addressed to one recipient</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">notification_id</span><span class="schema-field">recipient_id</span>
+        <span class="schema-field">type</span><span class="schema-field">message</span>
+        <span class="schema-field">date</span><span class="schema-field">read_status</span>
+      </div>
+    </div>
+
+    <div class="schema-card">
+      <div class="schema-head"><span>audit_logs</span><span class="muted">append-only</span></div>
+      <div class="schema-fields">
+        <span class="schema-field pk">log_id</span><span class="schema-field">user_id</span>
+        <span class="schema-field">action</span><span class="schema-field">record</span>
+        <span class="schema-field">timestamp</span>
+      </div>
+    </div>
+
+    <h2 id="security">9. Security and privacy</h2>
+    <p>
+      <strong>The governing principle:</strong> everyone sees only what their role needs, enforced at
+      the database and application levels — not in the interface. Hiding a link is not access control.
+    </p>
+    <p>How that is implemented in practice:</p>
+    <ul>
+      <li><strong>Role-based access control</strong>, with authorisation resolved from the linkage and assignment tables on every query.</li>
+      <li><strong>Row-level security</strong> in the database, so a query that omits the scope returns nothing rather than everything.</li>
+      <li><strong>Server-side authorisation on every endpoint.</strong> The client is never trusted to filter; a request for another family&rsquo;s learner is rejected by the API, not hidden by the app.</li>
+      <li><strong>Least privilege</strong> for staff and administrators — including the class-teacher-only restriction on taking a register.</li>
+      <li><strong>Secure authentication</strong> with a strong password policy, hashed credentials, expiring sessions and optional two-factor authentication.</li>
+      <li><strong>Encryption</strong> in transit, with sensitive data protected at rest.</li>
+      <li><strong>An audit trail</strong> of record creation, editing and deletion, visible to administrators and append-only.</li>
+      <li><strong>Secure backups</strong> and a tested recovery procedure.</li>
+      <li><strong>Privacy notices</strong> and appropriate consent and authorisation processes.</li>
+      <li><strong>Data minimisation</strong> — no personal information beyond what the school&rsquo;s stated purposes require. Learner photographs are optional, not assumed.</li>
+      <li><strong>Compliance</strong> with applicable Kenyan data-protection requirements, including the Data Protection Act, 2019.</li>
+    </ul>
+    <div class="notice notice-accent" style="margin:20px 0">
+      <span class="notice-icon" aria-hidden="true">ⓘ</span>
+      <span>
+        Try it: sign in as a guardian, then edit the learner id in the address bar. The record is
+        refused — the refusal does not depend on the screen.
+      </span>
+    </div>
+
+    <h2 id="technology">10. Recommended technology</h2>
+    <ul>
+      <li><strong>Web application</strong> — responsive, usable on a computer or a smartphone.</li>
+      <li><strong>Mobile application</strong> — Android for teachers and guardians first; iOS later if required.</li>
+      <li><strong>Backend</strong> — a secure REST or GraphQL API, or equivalent application server.</li>
+      <li><strong>Database</strong> — PostgreSQL or MySQL.</li>
+      <li><strong>Authentication</strong> — session or token based, with optional two-factor authentication.</li>
+      <li><strong>Notifications</strong> — push, SMS and/or email, chosen per school by budget and need.</li>
+      <li><strong>Hosting</strong> — reputable cloud infrastructure with automated backups and monitoring.</li>
+    </ul>
+    <p class="muted" style="font-size:.85rem">
+      The prototype is dependency-free — plain HTML, CSS and JavaScript, with a browser-local store
+      standing in for the API. It shows the behaviour, not the production architecture.
+    </p>
+
+    <h2 id="mvp">11. Delivery scope</h2>
+    <p>The first version carries this much and no more:</p>
+    <ul>
+      <li>School registration and administration</li>
+      <li>Teacher accounts</li>
+      <li>Parent/guardian accounts</li>
+      <li>Learner registration</li>
+      <li>Class and stream management</li>
+      <li>Daily attendance</li>
+      <li>Parent home-departure confirmation</li>
+      <li>Parent home-arrival confirmation</li>
+      <li>Behaviour comments</li>
+      <li>Notifications</li>
+      <li>Attendance reports</li>
+      <li>Strict role-based access</li>
+    </ul>
+
+    <h2 id="roadmap">12. Future expansion</h2>
+    <ul>
+      <li>Academic performance and report cards</li>
+      <li>School fees and payment tracking</li>
+      <li>School transport and bus tracking</li>
+      <li>Timetables</li>
+      <li>Homework and assignments</li>
+      <li>Examination management</li>
+      <li>A medical and emergency module, with appropriate privacy controls</li>
+      <li>Digital communication between school and guardians</li>
+      <li>School events and calendar</li>
+      <li>AI-assisted attendance and trend reports, subject to privacy and school policy</li>
+    </ul>
+
+    <h2 id="naming">13. Naming</h2>
+    <p>
+      <strong>Working name:</strong> LAPMS. Final name, logo and branding to be chosen before deployment.
+    </p>
+
+    <div class="cta" style="margin-top:44px">
+      <h2 style="font-size:1.3rem">See the blueprint running</h2>
+      <p>Four accounts, one school, four different views of the same data.</p>
+      <a class="btn btn-primary" href="login.html" style="margin-top:14px">Open the demo</a>
+    </div>
+
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p class="footer-note" style="margin:0;padding:0;border:0">
+      Prototype for review. All names, learners and records in the demonstration are fictional.
+      &nbsp;·&nbsp; <a href="index.html">Overview</a> &nbsp;·&nbsp; <a href="privacy.html">Privacy notice</a>
+    </p>
+  </div>
+</footer>
+
+<script src="assets/js/theme.js"></script>
+</body>
+</html>

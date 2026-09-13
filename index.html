@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en" data-base="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAPMS — Learner Attendance &amp; Parent Monitoring System</title>
+<meta name="description" content="Daily attendance for schools, and home-to-school-to-home confirmation for guardians. Everyone sees only their own learners.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/site.css">
+<!-- The hero panel reuses the application's stat and bar components. -->
+<link rel="stylesheet" href="assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">LA</span>
+      <span>
+        <span class="brand-name">LAPMS</span>
+        <span class="brand-sub">Attendance &amp; monitoring</span>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="blueprint.html">Blueprint</a>
+      <a href="privacy.html" class="hide-sm">Privacy</a>
+      <a class="btn btn-primary btn-sm" href="login.html">Open the demo</a>
+      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle>☀</button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ============================= Hero ============================= -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">Working name · LAPMS</span>
+        <h1>Every learner accounted for, door to door.</h1>
+        <p class="hero-lede">
+          Teachers take the register. Guardians confirm the journey either end.
+          Each person sees only their own learners.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-lg" href="login.html">Open the demo</a>
+          <a class="btn btn-lg" href="blueprint.html">Read the blueprint</a>
+        </div>
+        <p class="hero-note">Fictional school. No real learner data.</p>
+      </div>
+
+      <figure class="hero-figure" style="margin:0">
+        <div class="shot hero-shot">
+          <img src="assets/img/classroom.jpg" alt="Pupils at their desks in a Kenyan primary school classroom." width="1600" height="900">
+          <span class="shot-credit">
+            Gracemutheum,
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a>
+          </span>
+        </div>
+
+        <div class="hero-panel" aria-hidden="true">
+          <div class="stat-row" style="grid-template-columns:repeat(3,1fr);gap:8px">
+            <div class="stat stat-good" style="padding:9px 11px">
+              <span class="stat-accent-bar"></span>
+              <div class="stat-label">✓ In</div>
+              <div class="stat-value" style="font-size:1.3rem">41</div>
+            </div>
+            <div class="stat stat-warning" style="padding:9px 11px">
+              <span class="stat-accent-bar"></span>
+              <div class="stat-label">◴ Late</div>
+              <div class="stat-value" style="font-size:1.3rem">3</div>
+            </div>
+            <div class="stat stat-critical" style="padding:9px 11px">
+              <span class="stat-accent-bar"></span>
+              <div class="stat-label">✕ Out</div>
+              <div class="stat-value" style="font-size:1.3rem">2</div>
+            </div>
+          </div>
+          <div class="stack-row" style="margin-top:11px;grid-template-columns:1fr">
+            <div class="stack-bar">
+              <div class="stack-seg seg-present" style="flex:41"><span class="stack-seg-label">41</span></div>
+              <div class="stack-seg seg-late" style="flex:3"></div>
+              <div class="stack-seg seg-absent" style="flex:2"></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ====================== Roles ====================== -->
+  <section class="section section-sunken">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>One principle holds it together</h2>
+        <p>
+          Everyone sees only what their role needs — enforced in the data layer, not hidden
+          in the interface.
+        </p>
+      </div>
+
+      <div class="role-grid">
+
+        <article class="role-card">
+          <div class="shot role-shot">
+            <img src="assets/img/teachers.jpg" alt="Primary school teachers meeting together in Narok, Kenya." width="1400" height="933" loading="lazy">
+            <span class="shot-credit">Sam chepkilot, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></span>
+          </div>
+          <div class="role-card-head">
+            <span class="badge badge-accent">Administrator</span>
+            <h3 style="margin-top:10px">The whole school</h3>
+          </div>
+          <div class="role-card-body">
+            <ul class="check-list">
+              <li><span class="tick">✓</span><span>Classes, learners, staff and guardian links</span></li>
+              <li><span class="tick">✓</span><span>Reports and exports for every class</span></li>
+              <li><span class="tick">✓</span><span>The audit log</span></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="role-card">
+          <div class="shot role-shot">
+            <img src="assets/img/pupils.jpg" alt="Students outside Shela Primary School in Lamu County, Kenya." width="1400" height="933" loading="lazy">
+            <span class="shot-credit">Queen Asali, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></span>
+          </div>
+          <div class="role-card-head">
+            <span class="badge badge-accent">Teacher</span>
+            <h3 style="margin-top:10px">Assigned classes only</h3>
+          </div>
+          <div class="role-card-body">
+            <ul class="check-list">
+              <li><span class="tick">✓</span><span>Take the register in under a minute</span></li>
+              <li><span class="tick">✓</span><span>Record behaviour, positive and otherwise</span></li>
+              <li><span class="cross">✕</span><span>Nothing outside their assignments</span></li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="role-card">
+          <div class="shot role-shot">
+            <img src="assets/img/learners.jpg" alt="Samburu children seated in a classroom in Kenya." width="712" height="503" loading="lazy">
+            <span class="shot-credit">Moses Mwombe, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a></span>
+          </div>
+          <div class="role-card-head">
+            <span class="badge badge-accent">Parent / Guardian</span>
+            <h3 style="margin-top:10px">Their own children</h3>
+          </div>
+          <div class="role-card-body">
+            <ul class="check-list">
+              <li><span class="tick">✓</span><span>Confirm the child left home, and got home</span></li>
+              <li><span class="tick">✓</span><span>Attendance, lateness and shared behaviour notes</span></li>
+              <li><span class="cross">✕</span><span>No other learner, no other guardian</span></li>
+            </ul>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== The gap it closes ====================== -->
+  <section class="band">
+    <div class="band-img">
+      <img src="assets/img/girls.jpg" alt="Pupils in the grounds of Shela Primary School, Lamu County, Kenya." width="1400" height="933" loading="lazy">
+    </div>
+    <div class="wrap band-body">
+      <h2>The gap a register cannot see</h2>
+      <p>
+        A guardian confirms the child left home. The register shows no arrival. That is the
+        moment the system exists to catch — and it raises it before the register can be submitted.
+      </p>
+      <span class="shot-credit" style="position:static;display:inline-block;margin-top:14px">
+        Queen Asali, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a>
+      </span>
+    </div>
+  </section>
+
+  <!-- ====================== Access matrix ====================== -->
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Who can see what</h2>
+      </div>
+      <div class="card card-pad-0">
+        <div class="table-scroll">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th scope="col">Information</th>
+                <th scope="col">Administrator</th>
+                <th scope="col">Teacher</th>
+                <th scope="col">Guardian</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">All learners</th>
+                <td><span class="badge badge-present"><span class="dot"></span>Full</span></td>
+                <td><span class="badge badge-late"><span class="dot"></span>Authorised</span></td>
+                <td><span class="badge badge-absent"><span class="dot"></span>None</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Attendance</th>
+                <td><span class="badge badge-present"><span class="dot"></span>Full</span></td>
+                <td><span class="badge badge-present"><span class="dot"></span>Record</span></td>
+                <td><span class="badge badge-late"><span class="dot"></span>Own child</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Behaviour</th>
+                <td><span class="badge badge-present"><span class="dot"></span>Full</span></td>
+                <td><span class="badge badge-present"><span class="dot"></span>Record</span></td>
+                <td><span class="badge badge-late"><span class="dot"></span>Shared only</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Reports</th>
+                <td><span class="badge badge-present"><span class="dot"></span>Full</span></td>
+                <td><span class="badge badge-late"><span class="dot"></span>Own classes</span></td>
+                <td><span class="badge badge-late"><span class="dot"></span>Own child</span></td>
+              </tr>
+              <tr>
+                <th scope="row">Other guardians</th>
+                <td><span class="badge badge-late"><span class="dot"></span>Authorised</span></td>
+                <td><span class="badge badge-absent"><span class="dot"></span>None</span></td>
+                <td><span class="badge badge-absent"><span class="dot"></span>None</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== Daily workflow ====================== -->
+  <section class="section section-sunken">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>The daily record</h2>
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <span class="flow-actor">Guardian</span>
+          <h3>Leaves home</h3>
+          <p>Time, and a comment if it helps.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-actor">Teacher</span>
+          <h3>Register taken</h3>
+          <p>Present, Late, Absent, Excused or School activity.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-actor">System</span>
+          <h3>Cut-off passes</h3>
+          <p>Not marked present? The guardian is told.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-actor">Guardian</span>
+          <h3>Home again</h3>
+          <p>Confirmed, and the day is closed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== Categories ====================== -->
+  <section class="section">
+    <div class="wrap">
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Attendance</h3>
+          <div class="row" style="flex-wrap:wrap;gap:7px;margin-top:12px">
+            <span class="badge badge-present"><span class="dot"></span>✓ Present</span>
+            <span class="badge badge-late"><span class="dot"></span>◴ Late</span>
+            <span class="badge badge-absent"><span class="dot"></span>✕ Absent</span>
+            <span class="badge badge-excused"><span class="dot"></span>✉ Excused</span>
+            <span class="badge badge-activity"><span class="dot"></span>⚑ Activity</span>
+          </div>
+        </article>
+
+        <article class="feature">
+          <h3>Behaviour</h3>
+          <p style="font-size:.85rem;margin:10px 0 0">
+            A structured scale that avoids judgemental labels, and records positives as readily
+            as concerns — with the teacher named on every entry.
+          </p>
+        </article>
+
+        <article class="feature">
+          <h3>Notifications</h3>
+          <p style="font-size:.85rem;margin:10px 0 0">
+            Absence, lateness, a missing register, a behaviour concern, a teacher reply,
+            school announcements. Only ever to the linked guardian.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== CTA ====================== -->
+  <section class="section" style="padding-top:0">
+    <div class="wrap">
+      <div class="cta">
+        <h2>Four accounts, one school</h2>
+        <p>Sign in as each and watch the same data change shape.</p>
+        <div class="row" style="justify-content:center;margin-top:20px">
+          <a class="btn btn-primary btn-lg" href="login.html">Open the demo</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="index.html">
+          <span class="brand-mark" aria-hidden="true">LA</span>
+          <span><span class="brand-name">LAPMS</span></span>
+        </a>
+        <p class="muted" style="font-size:.8rem;margin-top:12px;max-width:32ch">
+          Working name. Final branding to be chosen before deployment.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="blueprint.html">Blueprint</a>
+        <a href="privacy.html">Privacy notice</a>
+        <a href="login.html">Demo</a>
+      </div>
+      <div class="footer-col">
+        <h4>Blueprint</h4>
+        <a href="blueprint.html#roles">Roles</a>
+        <a href="blueprint.html#data">Data model</a>
+        <a href="blueprint.html#security">Security</a>
+      </div>
+    </div>
+    <p class="footer-note">
+      Demonstration records are fictional. Photographs are Creative Commons works from
+      Wikimedia Commons by Gracemutheum, Queen Asali, Sam chepkilot and Moses Mwombe, used under
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="license noopener">CC BY-SA 4.0</a>;
+      they show real schools and are not connected to the fictional data in the demo.
+    </p>
+  </div>
+</footer>
+
+<script src="assets/js/theme.js"></script>
+</body>
+</html>

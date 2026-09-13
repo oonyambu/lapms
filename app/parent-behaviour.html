@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Behaviour — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['parent'],
+    page: 'parent-behaviour',
+    title: 'Behaviour',
+    sub: 'Shared with you by the school'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session();
+  var children = Store.learners(s, {});
+  if (!children.length) {
+    c.appendChild(Shell.emptyState('No learners are linked to this account.'));
+    return;
+  }
+
+  var focus = U.qs('learner');
+  var state = { learnerId: focus && Store.learner(s, focus) ? focus : '' };
+
+  var childSel = el('select', { id: 'ch' }, [el('option', { value: '' }, 'All my children')].concat(
+    children.map(function (l) {
+      return el('option', { value: l.id, selected: l.id === state.learnerId ? true : null },
+        l.name + ' — ' + Store.classLabel(l.classId));
+    })));
+  childSel.addEventListener('change', function () { state.learnerId = childSel.value; render(); });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field', style: 'flex:1 1 260px' }, [el('label', { for: 'ch' }, 'Child'), childSel])
+  ]));
+
+  c.appendChild(el('p', { class: 'page-intro' },
+    'Positives as well as concerns. Replies go to the class teacher.'));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  function render() {
+    U.clear(host);
+    var filter = state.learnerId ? { learnerId: state.learnerId } : {};
+    var sum = Store.behaviourSummary(s, filter);
+
+    host.appendChild(Shell.card(
+      'Summary',
+      U.plural(sum.total, 'note') + ' shared with you this term.',
+      sum.total
+        ? Charts.barList({
+            nameHeader: 'Category',
+            seriesLabel: 'Notes',
+            rows: SEED.BEHAVIOUR_ORDER.map(function (k) {
+              return { name: SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label, value: sum.counts[k] };
+            })
+          })
+        : Shell.emptyState('No behaviour notes have been shared with you.')
+    ));
+
+    if (!sum.total) return;
+
+    var body = el('div');
+    sum.records.forEach(function (b) {
+      var l = Store.learner(s, b.learnerId);
+      if (!l) return;
+
+      var replyBtn = el('button', { class: 'btn btn-sm', type: 'button' }, 'Reply to the teacher');
+      replyBtn.addEventListener('click', function () {
+        var box = el('textarea', {
+          id: 'rp',
+          value: 'About the note of ' + U.shortDate(b.date) + ' (' + SEED.BEHAVIOUR[b.category].label + '): '
+        });
+        U.modal('Reply about ' + l.name, el('div', null, [
+          el('div', { class: 'field' }, [el('label', { for: 'rp' }, 'Your message'), box]),
+          el('p', { class: 'hint', style: 'margin:0' }, 'This goes to the class teacher for ' + Store.classLabel(l.classId) + '.')
+        ]), {
+          actions: function (close) {
+            return [
+              el('button', { class: 'btn', onclick: close }, 'Cancel'),
+              el('button', {
+                class: 'btn btn-primary',
+                onclick: function () {
+                  if (!box.value.trim()) { U.toast('Please write a message'); return; }
+                  try {
+                    Store.addComment(s, l.id, box.value.trim(), null);
+                    U.toast('Reply sent to the teacher'); close();
+                  } catch (err) { U.toast('Not permitted: ' + err.message); }
+                }
+              }, 'Send')
+            ];
+          }
+        });
+      });
+
+      body.appendChild(el('div', { style: 'padding:14px 0;border-bottom:1px solid var(--border)' }, [
+        el('div', { class: 'row-between' }, [
+          el('div', { class: 'row', style: 'gap:10px' }, [
+            el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(l.name) }),
+            el('span', null, [
+              el('div', { style: 'font-weight:600;font-size:.875rem', text: l.name }),
+              el('div', { class: 'muted', style: 'font-size:.74rem', text: Store.classLabel(l.classId) })
+            ])
+          ]),
+          Shell.behaviourBadge(b.category)
+        ]),
+        el('div', { style: 'font-size:.9rem;margin-top:9px', text: b.comment }),
+        el('div', { class: 'row-between', style: 'margin-top:9px' }, [
+          el('span', { class: 'muted', style: 'font-size:.75rem',
+            text: 'Recorded by ' + Store.userName(b.recordedBy) + ' on ' + U.longDate(b.date) + ' at ' + b.time }),
+          replyBtn
+        ])
+      ]));
+    });
+
+    host.appendChild(Shell.card('Notes', null, body));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

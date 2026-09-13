@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['parent'],
+    page: 'parent-attendance',
+    title: 'Attendance',
+    sub: ''
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session();
+  var date = Store.currentSchoolDay();
+  var days = Store.termDays(date);
+
+  var children = Store.learners(s, {});
+  if (!children.length) {
+    c.appendChild(Shell.emptyState('No learners are linked to this account.'));
+    return;
+  }
+
+  var focus = U.qs('learner');
+  var state = {
+    learnerId: focus && Store.learner(s, focus) ? focus : children[0].id,
+    from: days[0],
+    to: days[days.length - 1]
+  };
+
+  var childSel = el('select', { id: 'ch' }, children.map(function (l) {
+    return el('option', { value: l.id, selected: l.id === state.learnerId ? true : null },
+      l.name + ' — ' + Store.classLabel(l.classId));
+  }));
+  var fromI = el('input', { type: 'date', id: 'from', value: state.from });
+  var toI = el('input', { type: 'date', id: 'to', value: state.to });
+  [childSel, fromI, toI].forEach(function (n) {
+    n.addEventListener('change', function () {
+      state.learnerId = childSel.value; state.from = fromI.value; state.to = toI.value;
+      render();
+    });
+  });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field', style: 'flex:1 1 240px' }, [el('label', { for: 'ch' }, 'Child'), childSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'from' }, 'From'), fromI]),
+    el('div', { class: 'field' }, [el('label', { for: 'to' }, 'To'), toI])
+  ]));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  function render() {
+    U.clear(host);
+    var l = Store.learner(s, state.learnerId);
+    if (!l) { Shell.denied(c); return; }
+
+    var st = Store.learnerStats(s, l.id, state.from, state.to);
+    var range = days.filter(function (x) { return x >= state.from && x <= state.to; });
+
+    host.appendChild(el('div', null, [
+      el('h2', { style: 'font-size:1.1rem;margin-bottom:2px', text: l.name }),
+      el('p', { class: 'muted', style: 'font-size:.82rem',
+        text: Store.classLabel(l.classId) + ' · ' + U.plural(st.total, 'school day') + ' recorded between ' +
+          U.shortDate(state.from) + ' and ' + U.shortDate(state.to) })
+    ]));
+
+    host.appendChild(Charts.statRow([
+      { label: 'Attendance rate', value: st.rate === null ? '—' : st.rate + '%', tone: 'accent' },
+      { label: 'Present', value: st.counts.present, tone: 'good', icon: '✓' },
+      { label: 'Late', value: st.counts.late, tone: 'warning', icon: '◴' },
+      { label: 'Absent', value: st.counts.absent, tone: 'critical', icon: '✕' },
+      { label: 'Excused', value: st.counts.excused, tone: 'serious', icon: '✉' },
+      { label: 'School activity', value: st.counts.activity, tone: 'accent', icon: '⚑' }
+    ]));
+
+    host.appendChild(Shell.card(
+      'How the days were recorded',
+      'Every attendance record in the range.',
+      st.total
+        ? Charts.donut({
+            segments: SEED.STATUS_ORDER.map(function (k) { return { key: k, value: st.counts[k] }; }),
+            headline: st.rate === null ? '—' : st.rate + '%',
+            headlineLabel: 'in school'
+          })
+        : Shell.emptyState('No records in this range.')
+    ));
+
+    // ---- Day-by-day, with the home confirmations alongside ----
+    var tbody = el('tbody');
+    range.slice().reverse().forEach(function (day) {
+      var a = Store.attendanceFor(s, l.id, day);
+      var dep = Store.movementFor(s, l.id, day, 'departure');
+      var arr = Store.movementFor(s, l.id, day, 'arrival');
+
+      var actions = el('div', { class: 'row', style: 'gap:6px;justify-content:flex-end' });
+      if (!dep) actions.appendChild(quickConfirm(l, day, 'departure'));
+      if (!arr) actions.appendChild(quickConfirm(l, day, 'arrival'));
+
+      tbody.appendChild(el('tr', null, [
+        el('td', { class: 'nowrap' }, [
+          el('div', { style: 'font-weight:550', text: U.shortDate(day) }),
+          el('div', { class: 'muted', style: 'font-size:.72rem',
+            text: new Date(day + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }) })
+        ]),
+        el('td', null, Shell.statusBadge(a ? a.status : null)),
+        el('td', { class: 'nowrap mono', text: a && a.time ? a.time : '—' }),
+        el('td', { class: 'nowrap mono', text: dep ? dep.time : '—' }),
+        el('td', { class: 'nowrap mono', text: arr ? arr.time : '—' }),
+        el('td', { class: 'muted', style: 'font-size:.8rem',
+          text: (a && a.note) || (dep && dep.comment) || (arr && arr.comment) || '' }),
+        el('td', null, actions)
+      ]));
+    });
+
+    host.appendChild(Shell.card(
+      'Day by day',
+      '',
+      el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+        el('thead', null, el('tr', null, [
+          el('th', null, 'Date'), el('th', null, 'Attendance'), el('th', null, 'Arrived school'),
+          el('th', null, 'Left home'), el('th', null, 'Home again'), el('th', null, 'Note'), el('th', null, '')
+        ])),
+        tbody
+      ]))
+    ));
+  }
+
+  function quickConfirm(learner, day, type) {
+    var btn = el('button', { class: 'btn btn-sm', type: 'button' },
+      type === 'departure' ? 'Add departure' : 'Add arrival');
+    btn.addEventListener('click', function () {
+      var timeField = el('input', { type: 'time', value: type === 'departure' ? '06:45' : '16:45', id: 'qt' });
+      var noteField = el('textarea', { id: 'qn', placeholder: 'Optional comment' });
+      U.modal(
+        (type === 'departure' ? 'Confirm departure from home' : 'Confirm arrival at home') +
+          ' — ' + U.longDate(day),
+        el('div', null, [
+          el('div', { class: 'field' }, [el('label', { for: 'qt' }, 'Time'), timeField]),
+          el('div', { class: 'field' }, [el('label', { for: 'qn' }, 'Comment'), noteField])
+        ]), {
+          actions: function (close) {
+            return [
+              el('button', { class: 'btn', onclick: close }, 'Cancel'),
+              el('button', {
+                class: 'btn btn-primary',
+                onclick: function () {
+                  try {
+                    Store.recordMovement(s, learner.id, day, type, timeField.value, noteField.value);
+                    U.toast('Confirmation recorded'); close(); render();
+                  } catch (err) { U.toast('Not permitted: ' + err.message); }
+                }
+              }, 'Confirm')
+            ];
+          }
+        });
+    });
+    return btn;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

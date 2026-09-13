@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learners — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin'],
+    page: 'admin-learners',
+    title: 'Learner register',
+    sub: ''
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session();
+  var date = Store.currentSchoolDay();
+  var termFrom = Store.termDays()[0];
+
+  var state = { q: '', classId: U.qs('class') || '', status: 'active' };
+
+  var qInput = el('input', { type: 'search', id: 'q', placeholder: 'Name or admission number' });
+  var classSel = el('select', { id: 'cls' }, [el('option', { value: '' }, 'All classes')].concat(
+    Store.classes(s).map(function (cl) {
+      return el('option', { value: cl.id, selected: cl.id === state.classId ? true : null }, cl.label);
+    })));
+  var statusSel = el('select', { id: 'st' }, [
+    el('option', { value: 'active' }, 'Active'),
+    el('option', { value: '' }, 'All'),
+    el('option', { value: 'inactive' }, 'Inactive')
+  ]);
+
+  [qInput, classSel, statusSel].forEach(function (n) {
+    n.addEventListener('input', sync);
+    n.addEventListener('change', sync);
+  });
+  function sync() {
+    state.q = qInput.value; state.classId = classSel.value; state.status = statusSel.value;
+    render();
+  }
+
+  var addBtn = el('button', { class: 'btn btn-sm btn-primary', type: 'button' }, 'Register a learner');
+  addBtn.addEventListener('click', openAdd);
+
+  var exportBtn = el('button', { class: 'btn btn-sm', type: 'button' }, 'Export CSV');
+  exportBtn.addEventListener('click', function () {
+    var rows = [['Admission number', 'Name', 'Class', 'Status', 'Guardian', 'Relationship', 'Attendance rate %']];
+    current().forEach(function (l) {
+      var g = Store.guardiansOf(s, l.id)[0];
+      var st = Store.learnerStats(s, l.id, termFrom, date);
+      rows.push([l.admissionNo, l.name, Store.classLabel(l.classId), l.status,
+        g ? g.parent.name : '', g ? g.link.relationship : '', st.rate === null ? '' : st.rate]);
+    });
+    U.downloadCsv('lapms-learners-' + date + '.csv', rows);
+    Store.audit(s, 'Exported learner list', U.plural(rows.length - 1, 'learner'));
+    Store.save();
+  });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field', style: 'flex:1 1 240px' }, [el('label', { for: 'q' }, 'Search'), qInput]),
+    el('div', { class: 'field' }, [el('label', { for: 'cls' }, 'Class'), classSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'st' }, 'Status'), statusSel]),
+    el('div', { class: 'grow' }),
+    exportBtn, addBtn
+  ]));
+
+  var host = el('div');
+  c.appendChild(host);
+
+  function current() {
+    return Store.learners(s, {
+      q: state.q || null,
+      classId: state.classId || null,
+      status: state.status || null
+    });
+  }
+
+  function render() {
+    U.clear(host);
+    var list = current();
+
+    var tbody = el('tbody');
+    list.forEach(function (l) {
+      var g = Store.guardiansOf(s, l.id)[0];
+      var st = Store.learnerStats(s, l.id, termFrom, date);
+      var today = Store.attendanceFor(s, l.id, date);
+      tbody.appendChild(el('tr', null, [
+        el('td', null, Shell.learnerLink(l, l.admissionNo)),
+        el('td', { class: 'nowrap', text: Store.classLabel(l.classId) }),
+        el('td', null, Shell.statusBadge(today ? today.status : null)),
+        el('td', { class: 'num', text: st.rate === null ? '—' : st.rate + '%' }),
+        el('td', { class: 'num', text: String(st.counts.absent) }),
+        el('td', { class: 'num', text: String(st.counts.late) }),
+        el('td', null, g
+          ? el('div', null, [
+              el('div', { style: 'font-size:.82rem', text: g.parent.name }),
+              el('div', { class: 'muted', style: 'font-size:.74rem', text: g.link.relationship + ' · ' + g.parent.phone })
+            ])
+          : el('span', { class: 'badge badge-late' }, [el('span', { class: 'dot' }), 'No guardian linked'])),
+        el('td', null, el('a', { class: 'btn btn-sm', href: 'learner.html?id=' + l.id }, 'Open'))
+      ]));
+    });
+
+    host.appendChild(el('p', { class: 'page-intro', style: 'margin-bottom:14px' },
+      U.plural(list.length, 'learner') + ' shown' + (state.classId ? ' in ' + Store.classLabel(state.classId) : '') + '.'));
+
+    host.appendChild(el('div', { class: 'card card-pad-0' },
+      list.length
+        ? el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+            el('thead', null, el('tr', null, [
+              el('th', null, 'Learner'), el('th', null, 'Class'), el('th', null, 'Today'),
+              el('th', { class: 'num' }, 'Attendance'), el('th', { class: 'num' }, 'Absences'),
+              el('th', { class: 'num' }, 'Late'), el('th', null, 'Guardian'), el('th', null, '')
+            ])),
+            tbody
+          ]))
+        : el('div', { style: 'padding:20px' }, Shell.emptyState('No learners match this search.'))
+    ));
+  }
+
+  function openAdd() {
+    var f = {};
+    function field(key, label, type, placeholder, required) {
+      f[key] = el('input', { type: type || 'text', id: 'f_' + key, placeholder: placeholder || '' });
+      return el('div', { class: 'field' }, [
+        el('label', { for: 'f_' + key }, label + (required ? ' *' : '')), f[key]
+      ]);
+    }
+    var clsSel = el('select', { id: 'f_class' }, Store.classes(s).map(function (cl) {
+      return el('option', { value: cl.id }, cl.label);
+    }));
+    var relSel = el('select', { id: 'f_rel' }, ['Mother', 'Father', 'Guardian'].map(function (r) {
+      return el('option', { value: r }, r);
+    }));
+
+    var nextNo = 'ADM/2026/' + U.pad(Store.db().learners.length + 1);
+
+    var body = el('div', null, [
+      el('div', { class: 'field-row' }, [
+        field('name', 'Full name', 'text', 'e.g. Amina Wanjala', true),
+        el('div', { class: 'field' }, [el('label', { for: 'f_class' }, 'Class *'), clsSel])
+      ]),
+      el('div', { class: 'field-row' }, [
+        field('admissionNo', 'Admission number', 'text', nextNo, true),
+        field('dateOfBirth', 'Date of birth', 'date')
+      ]),
+      field('emergencyContact', 'Emergency contact', 'text', '+254 7.. .. ....'),
+      el('hr', { class: 'divider' }),
+      el('h3', { style: 'font-size:.9rem' }, 'Parent / guardian'),
+      el('p', { class: 'hint', style: 'margin:0 0 12px' },
+        'This link is what authorises the guardian to see the learner.'),
+      el('div', { class: 'field-row' }, [
+        field('guardianName', 'Guardian name', 'text', 'e.g. Rose Wanjala'),
+        el('div', { class: 'field' }, [el('label', { for: 'f_rel' }, 'Relationship'), relSel])
+      ]),
+      el('div', { class: 'field-row' }, [
+        field('guardianPhone', 'Guardian phone', 'text', '+254 7.. .. ....'),
+        field('guardianEmail', 'Guardian email', 'email')
+      ])
+    ]);
+    f.admissionNo.value = nextNo;
+
+    U.modal('Register a learner', body, {
+      actions: function (close) {
+        return [
+          el('button', { class: 'btn', onclick: close }, 'Cancel'),
+          el('button', {
+            class: 'btn btn-primary',
+            onclick: function () {
+              if (!f.name.value.trim() || !f.admissionNo.value.trim()) {
+                U.toast('Name and admission number are required'); return;
+              }
+              try {
+                var l = Store.addLearner(s, {
+                  name: f.name.value.trim(),
+                  admissionNo: f.admissionNo.value.trim(),
+                  classId: clsSel.value,
+                  dateOfBirth: f.dateOfBirth.value,
+                  emergencyContact: f.emergencyContact.value.trim(),
+                  guardianName: f.guardianName.value.trim(),
+                  guardianPhone: f.guardianPhone.value.trim(),
+                  guardianEmail: f.guardianEmail.value.trim(),
+                  relationship: relSel.value
+                });
+                U.toast(l.name + ' registered');
+                close(); render();
+              } catch (err) { U.toast('Not permitted: ' + err.message); }
+            }
+          }, 'Register learner')
+        ];
+      }
+    });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

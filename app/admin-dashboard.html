@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var d = Store.db();
+  var m = Shell.mount({
+    roles: ['admin'],
+    page: 'admin-dashboard',
+    title: 'School dashboard',
+    sub: d.school.name + ' · ' + d.settings.term
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session();
+  var date = Store.currentSchoolDay();
+
+  var banner = Shell.dayBanner(date);
+  if (banner) c.appendChild(banner);
+
+  // ---------------- Headline numbers (section 10) ----------------
+  var sum = Store.daySummary(s, date);
+  var move = Store.movementSummary(s, date);
+  var follow = Store.followUps(s, date);
+
+  c.appendChild(Charts.statRow([
+    { label: 'Total learners', value: sum.total, tone: 'accent', meta: d.classes.length + ' classes' },
+    { label: 'Present', value: sum.present, tone: 'good', icon: '✓', meta: sum.marked ? U.pct(sum.present, sum.marked) + '% of those marked' : 'No register yet' },
+    { label: 'Late', value: sum.late, tone: 'warning', icon: '◴' },
+    { label: 'Absent', value: sum.absent, tone: 'critical', icon: '✕' },
+    { label: 'Excused', value: sum.excused, tone: 'serious', icon: '✉' },
+    { label: 'Left home', value: move.departures, tone: 'accent', icon: '→', meta: 'confirmed by guardians' },
+    { label: 'Arrived home', value: move.arrivals, tone: 'accent', icon: '←', meta: 'confirmed by guardians' },
+    { label: 'Need follow-up', value: follow.length, tone: follow.length ? 'critical' : 'good', icon: '!' }
+  ]));
+
+  // ---------------- Register status ----------------
+  var comparison = Store.classComparison(s, date);
+  var missing = comparison.filter(function (x) { return !x.registerTaken; });
+  if (missing.length) {
+    c.appendChild(el('div', { class: 'notice notice-warning' }, [
+      el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚠' }),
+      el('span', { class: 'grow' }, [
+        el('strong', { text: U.plural(missing.length, 'register') + ' not taken. ' }),
+        el('span', { text: missing.map(function (x) { return x.label; }).join(', ') +
+          ' — the cut-off is ' + d.settings.attendanceCutoff + '. The class teacher and the office have been notified.' })
+      ])
+    ]));
+  }
+
+  // ---------------- Class comparison ----------------
+  var left = el('div', { class: 'grid', style: 'align-content:start' });
+
+  left.appendChild(Shell.card(
+    'Class-by-class attendance',
+    U.longDate(date),
+    Charts.stackedRows({
+      nameHeader: 'Class',
+      rows: comparison.map(function (x) {
+        return { name: x.label, counts: x.counts, display: String(x.counts.total) };
+      })
+    })
+  ));
+
+  var withRate = comparison.filter(function (x) { return x.rate !== null; });
+  left.appendChild(Shell.card(
+    'Attendance rate by class',
+    'Present, late and school-activity learners as a share of those marked.',
+    withRate.length ? Charts.barList({
+      nameHeader: 'Class',
+      seriesLabel: 'Attendance rate',
+      max: 100,
+      rows: withRate.map(function (x) {
+        return { name: x.label, value: x.rate, display: x.rate + '%' };
+      })
+    }) : Shell.emptyState('No registers have been taken for this day yet.')
+  ));
+
+  var bsum = Store.behaviourSummary(s, { from: U.addDays(date, -30), to: date });
+  left.appendChild(Shell.card(
+    'Behaviour entries, last 30 days',
+    U.plural(bsum.total, 'entry', 'entries') + ' recorded across the school.',
+    bsum.total ? Charts.barList({
+      nameHeader: 'Category',
+      seriesLabel: 'Entries',
+      rows: SEED.BEHAVIOUR_ORDER.map(function (k) {
+        return { name: SEED.BEHAVIOUR[k].icon + '  ' + SEED.BEHAVIOUR[k].label, value: bsum.counts[k] };
+      })
+    }) : Shell.emptyState('No behaviour entries in this period.')
+  ));
+
+  // ---------------- Right column ----------------
+  var right = el('div', { class: 'grid', style: 'align-content:start' });
+
+  // Today at a glance
+  var donutSegments = SEED.STATUS_ORDER.map(function (k) { return { key: k, value: sum[k] }; });
+  if (sum.unmarked) donutSegments.push({ key: 'unmarked', value: sum.unmarked });
+  right.appendChild(Shell.card(
+    'Today at a glance',
+    null,
+    Charts.donut({
+      segments: donutSegments,
+      headline: sum.marked ? U.pct(sum.inSchool, sum.marked) + '%' : '—',
+      headlineLabel: 'in school'
+    })
+  ));
+
+  // Follow-up list
+  var followBody;
+  if (!follow.length) {
+    followBody = Shell.emptyState('Nothing outstanding. Every learner is accounted for.');
+  } else {
+    followBody = el('div');
+    follow.slice(0, 8).forEach(function (f) {
+      followBody.appendChild(el('div', { class: 'register-row', style: 'padding-left:0;padding-right:0' }, [
+        Shell.learnerLink(f.learner, Store.classLabel(f.learner.classId)),
+        el('div', { style: 'text-align:right' }, [
+          Shell.statusBadge(f.today ? f.today.status : null),
+          el('div', { class: 'register-meta', style: 'margin-top:4px', text: f.reasons.join(' · ') })
+        ])
+      ]));
+    });
+    if (follow.length > 8) {
+      followBody.appendChild(el('p', { class: 'muted', style: 'font-size:.8rem;margin:12px 0 0' },
+        'and ' + (follow.length - 8) + ' more — see the full list in Reports.'));
+    }
+  }
+  right.appendChild(Shell.card(
+    'Learners requiring follow-up',
+    'Absent today, or a pattern over three weeks.',
+    followBody,
+    el('a', { class: 'btn btn-sm', href: 'reports.html' }, 'Reports')
+  ));
+
+  // Home movement confirmations
+  right.appendChild(Shell.card(
+    'Home movement confirmations',
+    'Recorded for ' + U.shortDate(date),
+    Charts.barList({
+      nameHeader: 'Confirmation',
+      seriesLabel: 'Learners',
+      max: move.total,
+      rows: [
+        { name: '→ Left home', value: move.departures, display: move.departures + ' of ' + move.total },
+        { name: '← Arrived home', value: move.arrivals, display: move.arrivals + ' of ' + move.total }
+      ]
+    })
+  ));
+
+  // Recent activity from the audit trail
+  var logs = Store.auditLogs(s).slice(0, 7);
+  var logBody = el('div');
+  logs.forEach(function (l) {
+    logBody.appendChild(el('div', { style: 'padding:9px 0;border-bottom:1px solid var(--border)' }, [
+      el('div', { style: 'font-size:.85rem;font-weight:550', text: l.action }),
+      el('div', { class: 'muted', style: 'font-size:.78rem' },
+        l.record + ' — ' + Store.userName(l.userId) + ', ' + U.relativeDay(l.date) + ' ' + l.time)
+    ]));
+  });
+  right.appendChild(Shell.card(
+    'Recent activity',
+    null,
+    logs.length ? logBody : Shell.emptyState('No activity recorded.'),
+    el('a', { class: 'btn btn-sm', href: 'admin-audit.html' }, 'Audit log')
+  ));
+
+  c.appendChild(el('div', { class: 'split-2-1' }, [left, right]));
+})();
+</script>
+</body>
+</html>

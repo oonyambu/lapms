@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['parent'],
+    page: 'parent-dashboard',
+    title: 'Today',
+    sub: Store.db().school.name
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope, d = Store.db();
+  var date = Store.currentSchoolDay();
+
+  var banner = Shell.dayBanner(date);
+  if (banner) c.appendChild(banner);
+
+  var children = Store.learners(s, {});
+  if (!children.length) {
+    c.appendChild(Shell.emptyState('No learners are linked to this account. Please contact the school office.'));
+    return;
+  }
+
+  var host = el('div', { class: 'grid grid-2' });
+  c.appendChild(host);
+
+  function timelineItem(icon, done, title, meta, action) {
+    return el('div', { class: 'tl-item' }, [
+      el('div', { class: 'tl-rail' }, [
+        el('span', { class: 'tl-dot ' + (done ? 'done' : 'pending'), 'aria-hidden': 'true', text: icon }),
+        el('span', { class: 'tl-line' })
+      ]),
+      el('div', { class: 'tl-body' }, [
+        el('div', { class: 'tl-title', text: title }),
+        meta ? el('div', { class: 'tl-meta', text: meta }) : null,
+        action ? el('div', { style: 'margin-top:8px' }, action) : null
+      ])
+    ]);
+  }
+
+  function confirmMovement(learner, type) {
+    var body = el('div');
+    var timeField = el('input', { type: 'time', value: U.nowTime(), id: 'mvTime' });
+    var noteField = el('textarea', {
+      id: 'mvNote', placeholder: type === 'departure'
+        ? 'Optional — e.g. walking with a neighbour, or dropped at the gate.'
+        : 'Optional — e.g. arrived safely, or the van was delayed.'
+    });
+    body.appendChild(el('div', { class: 'field' }, [
+      el('label', { for: 'mvTime' }, type === 'departure' ? 'Time the child left home' : 'Time the child arrived home'),
+      timeField
+    ]));
+    body.appendChild(el('div', { class: 'field' }, [el('label', { for: 'mvNote' }, 'Comment'), noteField]));
+
+    U.modal(
+      type === 'departure' ? 'Confirm departure from home' : 'Confirm arrival at home',
+      body,
+      {
+        actions: function (close) {
+          return [
+            el('button', { class: 'btn', onclick: close }, 'Cancel'),
+            el('button', {
+              class: 'btn btn-primary',
+              onclick: function () {
+                try {
+                  Store.recordMovement(s, learner.id, date, type, timeField.value, noteField.value);
+                  U.toast(type === 'departure' ? 'Departure confirmed' : 'Arrival confirmed');
+                  close();
+                  render();
+                } catch (err) {
+                  U.toast('Not permitted: ' + err.message);
+                }
+              }
+            }, 'Confirm')
+          ];
+        }
+      }
+    );
+  }
+
+  function render() {
+    U.clear(host);
+
+    children.forEach(function (l) {
+      var att = Store.attendanceFor(s, l.id, date);
+      var dep = Store.movementFor(s, l.id, date, 'departure');
+      var arr = Store.movementFor(s, l.id, date, 'arrival');
+      var stats = Store.learnerStats(s, l.id, U.addDays(date, -30), date);
+
+      var card = el('section', { class: 'child-card' });
+
+      card.appendChild(el('div', { class: 'row', style: 'gap:14px;margin-bottom:16px' }, [
+        el('span', { class: 'avatar avatar-lg', 'aria-hidden': 'true', text: U.initials(l.name) }),
+        el('div', { class: 'grow', style: 'min-width:0' }, [
+          el('h2', { style: 'font-size:1.1rem;margin:0', text: l.name }),
+          el('div', { class: 'muted', style: 'font-size:.8rem',
+            text: Store.classLabel(l.classId) + ' · ' + l.admissionNo })
+        ]),
+        Shell.statusBadge(att ? att.status : null)
+      ]));
+
+      // ---- The day, in order ----
+      var tl = el('div', { class: 'timeline' });
+
+      tl.appendChild(timelineItem('→', !!dep, 'Left home for school',
+        dep ? ('Confirmed at ' + dep.time + ' by you' + (dep.comment ? ' — “' + dep.comment + '”' : ''))
+            : 'Not yet confirmed',
+        dep ? null : el('button', {
+          class: 'btn btn-sm btn-primary', type: 'button',
+          onclick: function () { confirmMovement(l, 'departure'); }
+        }, 'Confirm departure')
+      ));
+
+      tl.appendChild(timelineItem(att ? '✓' : '…', !!att, 'Attendance at school',
+        att
+          ? (SEED.STATUSES[att.status].label + (att.time ? ' · arrived ' + att.time : '') +
+             ' · recorded by ' + Store.userName(att.markedBy) + (att.note ? ' — ' + att.note : ''))
+          : 'Not taken yet. The school is notified after ' + d.settings.attendanceCutoff + '.',
+        null
+      ));
+
+      if (d.settings.releaseConfirmation) {
+        tl.appendChild(timelineItem('⇠', false, 'Released from school', 'Not recorded', null));
+      }
+
+      tl.appendChild(timelineItem('←', !!arr, 'Arrived home',
+        arr ? ('Confirmed at ' + arr.time + ' by you' + (arr.comment ? ' — “' + arr.comment + '”' : ''))
+            : 'Not yet confirmed',
+        arr ? null : el('button', {
+          class: 'btn btn-sm', type: 'button',
+          onclick: function () { confirmMovement(l, 'arrival'); }
+        }, 'Confirm arrival home')
+      ));
+
+      card.appendChild(tl);
+
+      // ---- 30-day summary ----
+      card.appendChild(el('hr', { class: 'divider' }));
+      card.appendChild(el('div', { class: 'stat-row', style: 'grid-template-columns:repeat(4,1fr);gap:8px' }, [
+        { label: 'Attendance', value: stats.rate === null ? '—' : stats.rate + '%', tone: 'accent' },
+        { label: 'Present', value: stats.counts.present, tone: 'good' },
+        { label: 'Late', value: stats.counts.late, tone: 'warning' },
+        { label: 'Absent', value: stats.counts.absent, tone: 'critical' }
+      ].map(function (t) {
+        return el('div', { class: 'stat stat-' + t.tone, style: 'padding:10px 12px' }, [
+          el('span', { class: 'stat-accent-bar', 'aria-hidden': 'true' }),
+          el('div', { class: 'stat-label', text: t.label }),
+          el('div', { class: 'stat-value', style: 'font-size:1.3rem', text: String(t.value) })
+        ]);
+      })));
+      card.appendChild(el('p', { class: 'muted', style: 'font-size:.72rem;margin:8px 0 0', text: 'Last 30 days' }));
+
+      card.appendChild(el('div', { class: 'row', style: 'margin-top:16px;flex-wrap:wrap' }, [
+        el('a', { class: 'btn btn-sm', href: 'parent-attendance.html?learner=' + l.id }, 'Attendance history'),
+        el('a', { class: 'btn btn-sm', href: 'parent-behaviour.html?learner=' + l.id }, 'Behaviour'),
+        el('a', { class: 'btn btn-sm', href: 'messages.html?learner=' + l.id }, 'Message the teacher')
+      ]));
+
+      host.appendChild(card);
+    });
+
+    // ---- Notifications ----
+    var notes = Store.notifications(s).slice(0, 6);
+    var nBody = el('div');
+    var ICON = { absent: '✕', late: '◴', behaviour: '★', register: '⚠', announcement: '📣', comment: '✉', reply: '✉' };
+    notes.forEach(function (n) {
+      nBody.appendChild(el('div', { class: 'notif' + (n.read ? '' : ' unread'), style: 'padding-left:0;padding-right:0' }, [
+        el('span', { class: 'notif-icon', 'aria-hidden': 'true', text: ICON[n.type] || '•' }),
+        el('span', null, [
+          el('div', { class: 'notif-title', text: n.title }),
+          el('div', { class: 'notif-text', text: n.message }),
+          el('div', { class: 'notif-time', text: U.relativeDay(n.date) + ' ' + n.time })
+        ])
+      ]));
+    });
+    host.appendChild(Shell.card(
+      'Recent notifications',
+      '',
+      notes.length ? nBody : Shell.emptyState('Nothing new.'),
+      el('a', { class: 'btn btn-sm', href: 'notifications.html' }, 'All')
+    ));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

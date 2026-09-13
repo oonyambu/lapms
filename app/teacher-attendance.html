@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Take attendance — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['teacher', 'admin'],
+    page: 'teacher-attendance',
+    title: 'Take attendance',
+    sub: 'Mark each learner, then submit'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), sc = m.scope;
+  var d = Store.db();
+
+  // Only the class teacher may record the register (enforced in store.js too).
+  var markable = sc.markableClassIds;
+  if (!markable.length) {
+    c.appendChild(el('div', { class: 'notice notice-warning' }, [
+      el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚿' }),
+      el('span', null, [
+        el('strong', { text: 'You are not the class teacher for any class. ' }),
+        el('span', { text: 'The register belongs to the class teacher. Enforced in the data layer, not on this screen.' })
+      ])
+    ]));
+    var mine = Store.classes(s);
+    c.appendChild(Shell.card('Classes you are authorised for', null,
+      mine.length ? el('div', null, mine.map(function (cl) {
+        var asg = d.teacherAssignments.filter(function (a) {
+          return a.classId === cl.id && sc.teacher && a.teacherId === sc.teacher.id;
+        })[0];
+        return el('div', { class: 'register-row', style: 'padding-left:0;padding-right:0' }, [
+          el('div', null, [
+            el('div', { class: 'register-name', text: cl.label }),
+            el('div', { class: 'register-meta', text: asg ? asg.role : '' })
+          ]),
+          el('a', { class: 'btn btn-sm', href: 'teacher-learners.html?class=' + cl.id }, 'View learners')
+        ]);
+      })) : Shell.emptyState('No classes assigned.')));
+    return;
+  }
+
+  var state = {
+    selected: {},
+    classId: U.qs('class') && markable.indexOf(U.qs('class')) !== -1 ? U.qs('class') : markable[0],
+    date: U.qs('date') || Store.currentSchoolDay()
+  };
+
+  var banner = Shell.dayBanner(state.date);
+  if (banner) c.appendChild(banner);
+
+  // ---------------- Filters ----------------
+  var classSel = el('select', { id: 'classSel' }, markable.map(function (id) {
+    return el('option', { value: id, selected: id === state.classId ? true : null }, Store.classLabel(id));
+  }));
+  var dateInput = el('input', { type: 'date', id: 'dateSel', value: state.date, max: U.today() });
+  classSel.addEventListener('change', function () { state.classId = classSel.value; render(); });
+  dateInput.addEventListener('change', function () { state.date = dateInput.value; render(); });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field' }, [el('label', { for: 'classSel' }, 'Class'), classSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'dateSel' }, 'Date'), dateInput]),
+    el('div', { class: 'grow' }),
+    el('button', { class: 'btn btn-sm', id: 'allPresent', type: 'button' }, '✓ Mark all present'),
+    el('button', { class: 'btn btn-sm btn-primary', id: 'submitBtn', type: 'button' }, 'Submit register')
+  ]));
+
+  var bulkHost = el('div');
+  c.appendChild(bulkHost);
+
+  var alertHost = el('div');
+  var summaryHost = el('div');
+  var listHost = el('div');
+  c.appendChild(alertHost);
+  c.appendChild(summaryHost);
+  c.appendChild(listHost);
+
+  // ---------------- Render ----------------
+  function render() {
+    var roster = Store.learners(s, { classId: state.classId });
+    U.clear(alertHost); U.clear(summaryHost); U.clear(listHost);
+
+    // The signal that matters: confirmed to have left home, but not yet marked present.
+    var gap = roster.filter(function (l) {
+      var dep = Store.movementFor(s, l.id, state.date, 'departure');
+      var att = Store.attendanceFor(s, l.id, state.date);
+      return dep && (!att || att.status === 'absent');
+    });
+    if (gap.length) {
+      alertHost.appendChild(el('div', { class: 'notice notice-warning' }, [
+        el('span', { class: 'notice-icon', 'aria-hidden': 'true', text: '⚠' }),
+        el('span', null, [
+          el('strong', { text: U.plural(gap.length, 'learner') + ' left home but ' + (gap.length === 1 ? 'is' : 'are') + ' not marked present. ' }),
+          el('span', { text: gap.map(function (l) { return l.name; }).join(', ') + '.' })
+        ])
+      ]));
+    }
+
+    var sum = Store.daySummary(s, state.date, state.classId);
+    summaryHost.appendChild(Charts.statRow([
+      { label: 'On register', value: sum.total, tone: 'accent' },
+      { label: 'Present', value: sum.present, tone: 'good', icon: '✓' },
+      { label: 'Late', value: sum.late, tone: 'warning', icon: '◴' },
+      { label: 'Absent', value: sum.absent, tone: 'critical', icon: '✕' },
+      { label: 'Excused', value: sum.excused, tone: 'serious', icon: '✉' },
+      { label: 'Not marked', value: sum.unmarked, tone: sum.unmarked ? 'warning' : 'good', icon: '–' }
+    ]));
+
+    // ---- Mark several learners at once ----
+    U.clear(bulkHost);
+    var counter = el('span', { class: 'muted', style: 'font-size:.8rem' });
+    function selectedIds() {
+      return Object.keys(state.selected).filter(function (k) { return state.selected[k]; });
+    }
+    function refreshCounter() {
+      var n = selectedIds().length;
+      counter.textContent = n ? n + ' selected' : 'None selected';
+      U.$$('[data-bulk]', bulkBar).forEach(function (b) { b.disabled = !n; });
+    }
+    var bulkBar = el('div', { class: 'filters', style: 'align-items:center' });
+    var selAll = el('input', { type: 'checkbox', id: 'selAll', style: 'width:auto' });
+    selAll.addEventListener('change', function () {
+      roster.forEach(function (l) { state.selected[l.id] = selAll.checked; });
+      U.$$('[data-pick]', listHost).forEach(function (cb) { cb.checked = selAll.checked; });
+      refreshCounter();
+    });
+    bulkBar.appendChild(el('div', { class: 'row', style: 'gap:8px' }, [
+      selAll, el('label', { for: 'selAll', style: 'margin:0' }, 'Select all')
+    ]));
+    bulkBar.appendChild(counter);
+    bulkBar.appendChild(el('div', { class: 'grow' }));
+    bulkBar.appendChild(el('span', { class: 'muted', style: 'font-size:.8rem' }, 'Mark selected:'));
+    SEED.STATUS_ORDER.forEach(function (key) {
+      var meta = SEED.STATUSES[key];
+      var b = el('button', { class: 'status-opt opt-' + meta.cls, type: 'button', 'data-bulk': '1', disabled: true }, [
+        el('span', { class: 'dot', 'aria-hidden': 'true' }),
+        el('span', { 'aria-hidden': 'true', text: meta.icon }),
+        el('span', { text: meta.label })
+      ]);
+      b.addEventListener('click', function () {
+        var ids = selectedIds();
+        if (!ids.length) return;
+        var t = ['present', 'late', 'activity'].indexOf(key) !== -1 ? U.nowTime() : null;
+        var n = Store.setAttendanceMany(s, ids, state.date, key, t);
+        U.toast(U.plural(n, 'learner') + ' marked ' + meta.label.toLowerCase());
+        state.selected = {};
+        render();
+      });
+      bulkBar.appendChild(b);
+    });
+    bulkHost.appendChild(bulkBar);
+
+    var rows = el('div', { class: 'card card-pad-0' });
+    rows.appendChild(el('div', { class: 'card-head', style: 'padding:18px 20px 12px' }, [
+      el('h2', { style: 'font-size:1rem', text: Store.classLabel(state.classId) + ' — ' + U.longDate(state.date) }),
+      el('span', { class: 'muted', style: 'font-size:.78rem',
+        text: 'Late after ' + d.settings.lateAfter + ' · cut-off ' + d.settings.attendanceCutoff })
+    ]));
+
+    if (!roster.length) {
+      rows.appendChild(el('div', { style: 'padding:20px' }, Shell.emptyState('No learners registered in this class.')));
+    }
+
+    roster.forEach(function (l) {
+      var rec = Store.attendanceFor(s, l.id, state.date);
+      var dep = Store.movementFor(s, l.id, state.date, 'departure');
+
+      var timeInput = el('input', {
+        type: 'time', style: 'width:110px', value: rec && rec.time ? rec.time : '',
+        'aria-label': 'Arrival time for ' + l.name
+      });
+      var timeWrap = el('div', { style: 'margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:flex-end' }, [
+        el('span', { class: 'register-meta', text: 'Arrival' }), timeInput
+      ]);
+      timeWrap.hidden = !(rec && ['present', 'late', 'activity'].indexOf(rec.status) !== -1);
+      timeInput.addEventListener('change', function () {
+        var cur = Store.attendanceFor(s, l.id, state.date);
+        if (!cur) return;
+        Store.setAttendance(s, l.id, state.date, cur.status, timeInput.value, cur.note);
+        Store.save();
+      });
+
+      var picker = el('div', { class: 'status-picker', role: 'group', 'aria-label': 'Attendance for ' + l.name });
+      SEED.STATUS_ORDER.forEach(function (key) {
+        var meta = SEED.STATUSES[key];
+        var btn = el('button', {
+          type: 'button',
+          class: 'status-opt opt-' + meta.cls,
+          'aria-pressed': String(!!rec && rec.status === key),
+          title: meta.label
+        }, [
+          el('span', { class: 'dot', 'aria-hidden': 'true' }),
+          el('span', { 'aria-hidden': 'true', text: meta.icon }),
+          el('span', { text: meta.label })
+        ]);
+        btn.addEventListener('click', function () {
+          var t = ['present', 'activity'].indexOf(key) !== -1 ? (timeInput.value || U.nowTime())
+            : key === 'late' ? (timeInput.value || U.nowTime()) : null;
+          try {
+            Store.setAttendance(s, l.id, state.date, key, t, null);
+            Store.save();
+          } catch (err) {
+            U.toast('Not permitted: ' + err.message);
+            return;
+          }
+          U.$$('.status-opt', picker).forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+          btn.setAttribute('aria-pressed', 'true');
+          timeWrap.hidden = ['present', 'late', 'activity'].indexOf(key) === -1;
+          if (!timeWrap.hidden && !timeInput.value) timeInput.value = t;
+          refreshSummary();
+        });
+        picker.appendChild(btn);
+      });
+
+      var pick = el('input', {
+        type: 'checkbox', 'data-pick': '1', style: 'width:auto',
+        checked: state.selected[l.id] ? true : null, 'aria-label': 'Select ' + l.name
+      });
+      pick.addEventListener('change', function () { state.selected[l.id] = pick.checked; refreshCounter(); });
+
+      rows.appendChild(el('div', { class: 'register-row' }, [
+        el('div', { class: 'register-learner' }, [
+          pick,
+          el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(l.name) }),
+          el('span', { style: 'min-width:0' }, [
+            el('a', { class: 'register-name', href: 'learner.html?id=' + l.id, style: 'color:inherit', text: l.name }),
+            el('div', { class: 'register-meta' },
+              l.admissionNo + (dep ? ' · → left home ' + dep.time : ' · no departure confirmation'))
+          ])
+        ]),
+        el('div', null, [picker, timeWrap])
+      ]));
+    });
+
+    listHost.appendChild(rows);
+    refreshCounter();
+  }
+
+  function refreshSummary() {
+    var sum = Store.daySummary(s, state.date, state.classId);
+    U.clear(summaryHost).appendChild(Charts.statRow([
+      { label: 'On register', value: sum.total, tone: 'accent' },
+      { label: 'Present', value: sum.present, tone: 'good', icon: '✓' },
+      { label: 'Late', value: sum.late, tone: 'warning', icon: '◴' },
+      { label: 'Absent', value: sum.absent, tone: 'critical', icon: '✕' },
+      { label: 'Excused', value: sum.excused, tone: 'serious', icon: '✉' },
+      { label: 'Not marked', value: sum.unmarked, tone: sum.unmarked ? 'warning' : 'good', icon: '–' }
+    ]));
+  }
+
+  U.$('#allPresent').addEventListener('click', function () {
+    var roster = Store.learners(s, { classId: state.classId });
+    var n = 0;
+    roster.forEach(function (l) {
+      var rec = Store.attendanceFor(s, l.id, state.date);
+      if (rec) return;                       // never overwrite a decision already made
+      Store.setAttendance(s, l.id, state.date, 'present', d.settings.schoolStart, null);
+      n += 1;
+    });
+    Store.save();
+    U.toast(n ? U.plural(n, 'learner') + ' marked present' : 'Every learner already has a status');
+    render();
+  });
+
+  U.$('#submitBtn').addEventListener('click', function () {
+    var sum = Store.daySummary(s, state.date, state.classId);
+    if (sum.unmarked) {
+      U.toast(U.plural(sum.unmarked, 'learner') + ' still unmarked');
+      return;
+    }
+    U.confirmBox('Submit the register?',
+      'Guardians of absent and late learners will be notified.',
+      function () {
+        var sent = Store.submitRegister(s, state.classId, state.date);
+        U.toast('Register submitted' + (sent ? ' — ' + U.plural(sent, 'guardian') + ' notified' : ''));
+        render();
+      }, 'Submit');
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en" data-base="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — LAPMS</title>
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/base.css">
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+<style>
+  .login-wrap { width: min(940px, 100% - 32px); margin: 0 auto; padding: 44px 0 72px; }
+  .login-grid { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); align-items: start; }
+  @media (max-width: 860px) { .login-grid { grid-template-columns: 1fr; } }
+  .account {
+    display: grid; grid-template-columns: 40px 1fr auto; gap: 13px; align-items: center;
+    width: 100%; text-align: left; font: inherit; cursor: pointer;
+    padding: 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface-1); margin-bottom: 10px; transition: border-color .12s, background .12s;
+  }
+  .account:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .account:last-child { margin-bottom: 0; }
+  .account-name { font-weight: 600; font-size: .92rem; }
+  .account-sub { font-size: .78rem; color: var(--text-muted); }
+  .account-blurb { font-size: .78rem; color: var(--text-secondary); margin-top: 3px; }
+  .account-go { color: var(--text-muted); font-size: 1.1rem; }
+  .role-tag { font-size: .66rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
+  .real-form { opacity: .6; pointer-events: none; }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">LA</span>
+      <span>
+        <span class="brand-name">LAPMS</span>
+        <span class="brand-sub">Attendance &amp; monitoring</span>
+      </span>
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="index.html">Overview</a>
+      <a href="blueprint.html">Blueprint</a>
+      <a href="privacy.html" class="hide-sm">Privacy</a>
+      <button class="btn btn-ghost btn-sm" type="button" data-theme-toggle>☀</button>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="login-wrap">
+  <div class="login-grid">
+
+    <section>
+      <h1 style="font-size:1.7rem">Choose an account to explore</h1>
+      <p class="secondary" style="max-width:56ch">
+        Same school, same data. Only what each person may see changes. Try the subject teacher and
+        the guardian back to back.
+      </p>
+
+      <div id="accounts" role="list" style="margin-top:22px"></div>
+
+      <div class="notice" style="margin-top:20px">
+        <span class="notice-icon" aria-hidden="true">ⓘ</span>
+        <span>
+          <strong>No authentication here.</strong> Accounts are chosen from a list so the access
+          rules can be reviewed. <a href="blueprint.html#security">How security is specified &rarr;</a>
+        </span>
+      </div>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2 style="font-size:1rem">Sign in</h2>
+        <p class="card-sub">How the real screen will look.</p>
+        <form class="real-form" aria-hidden="true" tabindex="-1">
+          <div class="field">
+            <label for="u">Phone number or email</label>
+            <input type="text" id="u" placeholder="+254 7.. .. ...." disabled>
+          </div>
+          <div class="field">
+            <label for="p">Password</label>
+            <input type="password" id="p" placeholder="••••••••" disabled>
+          </div>
+          <button class="btn btn-primary btn-block" type="button" disabled>Sign in</button>
+          <p class="hint" style="text-align:center">Two-factor authentication optional per school policy.</p>
+        </form>
+      </section>
+
+      <section class="card" style="margin-top:16px">
+        <h2 style="font-size:1rem">Demonstration data</h2>
+        <p class="card-sub" style="margin-bottom:12px">
+          Generated in your browser. Nothing is sent anywhere.
+        </p>
+        <dl style="margin:0;font-size:.82rem" id="dataFacts"></dl>
+        <button class="btn btn-sm btn-block" style="margin-top:14px" id="resetBtn" type="button">
+          Reset demonstration data
+        </button>
+        <p class="hint" id="persistNote"></p>
+      </section>
+    </aside>
+
+  </div>
+</main>
+
+<script src="assets/js/util.js"></script>
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/auth.js"></script>
+<script>
+(function () {
+  var el = U.el;
+
+  // If a session is already open, offer to continue rather than forcing a new choice.
+  var existing = Store.session();
+  if (existing) {
+    var sc = Store.scope(existing);
+    if (sc.userId) {
+      document.getElementById('accounts').appendChild(
+        el('div', { class: 'notice notice-accent', style: 'margin-bottom:16px' }, [
+          el('span', { class: 'notice-icon', text: 'ⓘ' }),
+          el('span', { class: 'grow' }, 'You are signed in as ' + sc.user.name + '.'),
+          el('a', { class: 'btn btn-sm btn-primary', href: Auth.homeFor(sc.role) }, 'Continue')
+        ])
+      );
+    }
+  }
+
+  var TONE = { admin: 'badge-activity', teacher: 'badge-present', parent: 'badge-excused' };
+
+  var host = document.getElementById('accounts');
+  Auth.demoAccounts().forEach(function (a) {
+    var btn = el('button', { class: 'account', type: 'button', role: 'listitem' }, [
+      el('span', { class: 'avatar', 'aria-hidden': 'true', text: U.initials(a.user.name) }),
+      el('span', { style: 'min-width:0' }, [
+        el('span', { class: 'badge ' + TONE[a.user.role] + ' role-tag' }, [
+          el('span', { class: 'dot' }),
+          Shell_roleLabel(a.user.role)
+        ]),
+        el('div', { class: 'account-name', style: 'margin-top:6px', text: a.user.name }),
+        a.sub ? el('div', { class: 'account-sub', text: a.sub }) : null,
+        el('div', { class: 'account-blurb', text: a.blurb })
+      ]),
+      el('span', { class: 'account-go', 'aria-hidden': 'true', text: '→' })
+    ]);
+    btn.addEventListener('click', function () { Auth.login(a.user.id); });
+    host.appendChild(btn);
+  });
+
+  function Shell_roleLabel(r) {
+    return r === 'admin' ? 'Administrator' : r === 'teacher' ? 'Teacher' : 'Parent / Guardian';
+  }
+
+  // Demo data facts
+  var d = Store.db();
+  var facts = [
+    ['School', d.school.name],
+    ['Term', d.settings.term],
+    ['Learners', d.learners.length],
+    ['Classes', d.classes.length],
+    ['Teachers', d.teachers.length],
+    ['Guardians', d.parents.length],
+    ['Attendance records', d.attendance.length.toLocaleString()],
+    ['Movement confirmations', d.movements.length.toLocaleString()]
+  ];
+  var dl = document.getElementById('dataFacts');
+  facts.forEach(function (f) {
+    dl.appendChild(el('div', { class: 'row-between', style: 'padding:4px 0;border-bottom:1px solid var(--border)' }, [
+      el('dt', { class: 'muted', text: f[0] }),
+      el('dd', { style: 'margin:0;font-weight:600', text: String(f[1]) })
+    ]));
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    U.confirmBox('Reset demonstration data',
+      'This rebuilds the fictional school and discards any changes you made while exploring.',
+      function () { Store.reset(); Store.clearSession(); location.reload(); }, 'Reset');
+  });
+
+  if (!Store.canPersist) {
+    document.getElementById('persistNote').textContent =
+      'Browser storage is unavailable here, so changes last only until you close the tab. ' +
+      'Serving the folder over http:// enables saving.';
+  }
+})();
+</script>
+<script src="assets/js/theme.js"></script>
+</body>
+</html>

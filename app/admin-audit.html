@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en" data-base="../">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit log — LAPMS</title>
+<link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/base.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<script>try{var t=localStorage.getItem('lapms.theme')||'light';if(t!=='system')document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}</script>
+</head>
+<body>
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/seed.js"></script>
+<script src="../assets/js/store.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/shell.js"></script>
+<script>
+(function () {
+  var m = Shell.mount({
+    roles: ['admin'],
+    page: 'admin-audit',
+    title: 'Audit log',
+    sub: 'Who did what, and when'
+  });
+  if (!m) return;
+
+  var el = U.el, c = m.content, s = Store.session(), d = Store.db();
+  var state = { q: '', userId: '' };
+
+  c.appendChild(el('p', { class: 'page-intro' },
+    'Append-only, and visible to administrators only.'));
+
+  var qInput = el('input', { type: 'search', id: 'aq', placeholder: 'Search action, record or person' });
+  var userSel = el('select', { id: 'au' }, [el('option', { value: '' }, 'Everyone')].concat(
+    d.users.filter(function (u) { return u.role !== 'parent'; })
+      .map(function (u) { return el('option', { value: u.id }, u.name); })
+  ));
+  qInput.addEventListener('input', function () { state.q = qInput.value; render(); });
+  userSel.addEventListener('change', function () { state.userId = userSel.value; render(); });
+
+  var exportBtn = el('button', { class: 'btn btn-sm', type: 'button' }, 'Export CSV');
+  exportBtn.addEventListener('click', function () {
+    var rows = [['Date', 'Time', 'User', 'Role', 'Action', 'Record']];
+    logs().forEach(function (l) {
+      var u = Store.userById(l.userId);
+      rows.push([l.date, l.time, u ? u.name : l.userId, u ? u.role : '', l.action, l.record]);
+    });
+    U.downloadCsv('lapms-audit-log.csv', rows);
+    U.toast('Audit log exported');
+  });
+
+  c.appendChild(el('div', { class: 'filters' }, [
+    el('div', { class: 'field', style: 'flex:1 1 260px' }, [el('label', { for: 'aq' }, 'Search'), qInput]),
+    el('div', { class: 'field' }, [el('label', { for: 'au' }, 'Staff member'), userSel]),
+    el('div', { class: 'grow' }),
+    exportBtn
+  ]));
+
+  var host = el('div', { class: 'grid' });
+  c.appendChild(host);
+
+  function logs() {
+    return Store.auditLogs(s, { q: state.q || null, userId: state.userId || null });
+  }
+
+  function render() {
+    U.clear(host);
+    var list = logs();
+
+    // Actions by type, so unusual activity stands out
+    var byAction = {};
+    list.forEach(function (l) {
+      var key = l.action.replace(/\s+—.*$/, '');
+      byAction[key] = (byAction[key] || 0) + 1;
+    });
+    var actionRows = Object.keys(byAction)
+      .map(function (k) { return { name: k, value: byAction[k] }; })
+      .sort(function (a, b) { return b.value - a.value; })
+      .slice(0, 8);
+
+    host.appendChild(Shell.card(
+      'Activity by action',
+      U.plural(list.length, 'entry', 'entries') + ' in the log.',
+      actionRows.length
+        ? Charts.barList({ nameHeader: 'Action', seriesLabel: 'Entries', rows: actionRows })
+        : Shell.emptyState('Nothing matches this filter.')
+    ));
+
+    var tbody = el('tbody');
+    list.slice(0, 300).forEach(function (l) {
+      var u = Store.userById(l.userId);
+      tbody.appendChild(el('tr', null, [
+        el('td', { class: 'nowrap mono', style: 'font-size:.78rem', text: l.date + ' ' + l.time }),
+        el('td', null, el('div', { class: 'row', style: 'gap:9px' }, [
+          el('span', { class: 'avatar', style: 'width:26px;height:26px;font-size:.68rem', 'aria-hidden': 'true',
+            text: U.initials(u ? u.name : '?') }),
+          el('span', null, [
+            el('div', { style: 'font-size:.82rem;font-weight:550', text: u ? u.name : 'Unknown' }),
+            el('div', { class: 'muted', style: 'font-size:.72rem', text: u ? Shell.ROLE_LABEL[u.role] : '' })
+          ])
+        ])),
+        el('td', { style: 'font-size:.85rem;font-weight:550', text: l.action }),
+        el('td', { class: 'muted', style: 'font-size:.82rem', text: l.record })
+      ]));
+    });
+
+    host.appendChild(Shell.card(
+      'Entries',
+      list.length > 300 ? 'Showing the 300 most recent of ' + list.length + '.' : null,
+      list.length
+        ? el('div', { class: 'table-scroll' }, el('table', { class: 'data' }, [
+            el('thead', null, el('tr', null, [
+              el('th', null, 'When'), el('th', null, 'Who'), el('th', null, 'Action'), el('th', null, 'Record')
+            ])),
+            tbody
+          ]))
+        : Shell.emptyState('No entries match this filter.')
+    ));
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
